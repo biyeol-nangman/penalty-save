@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "패널티킥 세이브",
+  "short_name": "패널티킥",
+  "description": "패널티킥을 막을 때마다 레벨이 오르는 골키퍼 게임",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c130f",
+  "theme_color": "#0c130f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
