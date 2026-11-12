@@ -160,8 +160,9 @@
   .detail { margin: 0; color: var(--chalk-dim); font-size: 14px; }
   .status { margin: 0; min-height: 1.5em; font-size: 14px; }
 
-  .under { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 2px 0; }
+  .under { display: grid; gap: 8px; margin: 10px 2px 0; }
   .mods { margin: 0; font-size: 13px; color: var(--chalk-dim); min-width: 0; }
+  .sgroup { display: flex; flex-wrap: wrap; gap: 8px; }
   .sbtn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--panel); color: var(--chalk); border: 1px solid var(--rule); border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
   .sbtn:hover { background: var(--panel-2); }
   .sbtn:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
@@ -282,14 +283,24 @@
       </div>
       <div class="under">
         <p class="mods">현재 슈팅 <b id="hMods">직선</b></p>
-        <button class="sbtn" id="soundBtn" type="button" aria-pressed="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
-            <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.8 6a8.5 8.5 0 0 1 0 12"/></g>
-            <g class="mute" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></g>
-          </svg>
-          <span class="slabel">소리 켜짐</span>
-        </button>
+        <div class="sgroup">
+          <button class="sbtn" id="soundBtn" type="button" aria-pressed="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
+              <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.8 6a8.5 8.5 0 0 1 0 12"/></g>
+              <g class="mute" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></g>
+            </svg>
+            <span class="slabel">효과음 켜짐</span>
+          </button>
+          <button class="sbtn" id="musicBtn" type="button" aria-pressed="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M9 17V5l10-2v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <circle cx="6.5" cy="17.5" r="2.7" fill="currentColor"/><circle cx="16.5" cy="15.5" r="2.7" fill="currentColor"/>
+              <path class="mute" d="M3.5 3.5l17 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span class="slabel">음악 켜짐</span>
+          </button>
+        </div>
       </div>
       <p class="hint">11m 거리의 패널티 스폿에서 슈팅이 날아옵니다.</p>
     </section>
@@ -509,9 +520,10 @@
 
   /* ---------- sound: synthesised with Web Audio, no audio files ---------- */
   var sfxOn = store.get('pks-sound') !== 'off';
+  var mus = { on: store.get('pks-music') !== 'off', step: 0, next: 0, timer: null, gain: null };
   var AC = window.AudioContext || window.webkitAudioContext, actx = null, master = null, noiseBuf = null;
   function ensureAudio() {
-    if (!AC || !sfxOn) return;
+    if (!AC || !(sfxOn || mus.on)) return;
     try {
       if (!actx) {
         actx = new AC();
@@ -523,32 +535,95 @@
       if (actx.state === 'suspended') actx.resume();
     } catch (e) { actx = null; }
   }
-  function tone(type, f0, f1, t0, dur, vol) {
+  function tone(type, f0, f1, t0, dur, vol, dest) {
     var o = actx.createOscillator(), gn = actx.createGain();
     o.type = type; o.frequency.setValueAtTime(f0, t0);
     if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     gn.gain.setValueAtTime(0.0001, t0);
     gn.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
     gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(gn); gn.connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+    o.connect(gn); gn.connect(dest || master); o.start(t0); o.stop(t0 + dur + 0.02);
   }
-  function noise(ftype, freq, t0, dur, vol) {
+  function noise(ftype, freq, t0, dur, vol, dest) {
     var src = actx.createBufferSource(), f = actx.createBiquadFilter(), gn = actx.createGain();
     src.buffer = noiseBuf; f.type = ftype; f.frequency.value = freq;
     gn.gain.setValueAtTime(vol, t0); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(f); f.connect(gn); gn.connect(master); src.start(t0); src.stop(t0 + dur + 0.02);
+    src.connect(f); f.connect(gn); gn.connect(dest || master); src.start(t0); src.stop(t0 + dur + 0.02);
   }
   function play(fn) { if (!actx || !sfxOn) return; try { fn(actx.currentTime); } catch (e) {} }
   var sfx = {
     kick: function () { play(function (t) { tone('sine', 170, 55, t, 0.14, 0.9); noise('lowpass', 900, t, 0.07, 0.5); }); },
     save: function () { play(function (t) { tone('triangle', 520, 780, t, 0.12, 0.45); tone('sine', 120, 70, t, 0.1, 0.5); noise('highpass', 2500, t, 0.05, 0.35); }); },
-    fail: function () { play(function (t) { [392, 349, 311, 247].forEach(function (f, i) { tone('triangle', f, f * 0.97, t + i * 0.2, i === 3 ? 0.7 : 0.19, 0.5); }); }); }
+    goal: function () { play(function (t) { tone('sawtooth', 196, 98, t, 0.28, 0.4); noise('bandpass', 1200, t, 0.16, 0.4); tone('sine', 90, 50, t, 0.18, 0.6); }); },
+    fail: function () { musicStop(); play(function (t) { [392, 349, 311, 247].forEach(function (f, i) { tone('triangle', f, f * 0.97, t + i * 0.2, i === 3 ? 0.7 : 0.19, 0.5); }); }); }
   };
-  var soundBtn = $('soundBtn');
+  /* background music: a short chant-style loop, tempo rises with the level */
+  var CHORDS = [
+    { root: 48, arp: [60, 64, 67] },   // C
+    { root: 45, arp: [57, 60, 64] },   // Am
+    { root: 41, arp: [60, 65, 69] },   // F
+    { root: 43, arp: [59, 62, 67] }    // G
+  ];
+  var MELODY = [
+    [[0, 72, 2], [2, 72, 2], [4, 76, 2], [6, 72, 2], [8, 79, 4], [12, 76, 4]],
+    [[0, 76, 2], [2, 76, 2], [4, 72, 2], [6, 69, 2], [8, 72, 6]],
+    [[0, 72, 2], [2, 77, 2], [4, 77, 2], [6, 72, 2], [8, 77, 4], [12, 72, 4]],
+    [[0, 74, 2], [2, 74, 2], [4, 79, 2], [6, 74, 2], [8, 71, 4], [12, 67, 2], [14, 71, 2]]
+  ];
+  function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function musicStep(step, t, dur) {
+    var bar = Math.floor(step / 16) % 4, k = step % 16, ch = CHORDS[bar], bus = mus.gain, f;
+    if (k % 2 === 0) {
+      f = mtof(k % 4 === 2 ? ch.root + 12 : ch.root);
+      tone('triangle', f, f, t, dur * 1.8, 0.7, bus);
+      f = mtof(ch.arp[[0, 1, 2, 1][(k / 2) % 4]]);
+      tone('square', f, f, t, dur * 1.6, 0.1, bus);
+      noise('highpass', 7000, t, 0.03, 0.16, bus);
+    }
+    MELODY[bar].forEach(function (n) {
+      if (n[0] === k) { f = mtof(n[1]); tone('square', f, f, t, dur * n[2] * 0.92, 0.17, bus); }
+    });
+    if (k === 0 || k === 8) tone('sine', 150, 45, t, 0.12, 0.9, bus);
+    if (k === 4 || k === 12) noise('bandpass', 1800, t, 0.09, 0.5, bus);
+  }
+  function musicTick() {
+    if (!actx) return;
+    var lv = (typeof g === 'object' && g && g.level) || 1;
+    var dur = 60 / Math.min(168, 112 + 4 * (lv - 1)) / 4;
+    while (mus.next < actx.currentTime + 0.25) {
+      musicStep(mus.step, mus.next, dur);
+      mus.step++; mus.next += dur;
+    }
+  }
+  function musicStart() {
+    if (!actx || !mus.on || mus.timer) return;
+    try {
+      if (!mus.gain) { mus.gain = actx.createGain(); mus.gain.connect(master); }
+      mus.gain.gain.cancelScheduledValues(actx.currentTime);
+      mus.gain.gain.setValueAtTime(0.2, actx.currentTime);
+      mus.step = 0; mus.next = actx.currentTime + 0.08;
+      mus.timer = setInterval(musicTick, 40);
+    } catch (e) { mus.timer = null; }
+  }
+  function musicStop() {
+    if (mus.timer) { clearInterval(mus.timer); mus.timer = null; }
+    try { if (mus.gain && actx) { mus.gain.gain.cancelScheduledValues(actx.currentTime); mus.gain.gain.setTargetAtTime(0, actx.currentTime, 0.05); } } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!actx) return;
+    try { if (document.hidden) actx.suspend(); else if (sfxOn || mus.on) actx.resume(); } catch (e) {}
+  });
+
+  var soundBtn = $('soundBtn'), musicBtn = $('musicBtn');
   function paintSound() {
     soundBtn.setAttribute('aria-pressed', sfxOn ? 'true' : 'false');
     soundBtn.classList.toggle('off', !sfxOn);
-    soundBtn.querySelector('.slabel').textContent = sfxOn ? '소리 켜짐' : '소리 꺼짐';
+    soundBtn.querySelector('.slabel').textContent = sfxOn ? '효과음 켜짐' : '효과음 꺼짐';
+  }
+  function paintMusic() {
+    musicBtn.setAttribute('aria-pressed', mus.on ? 'true' : 'false');
+    musicBtn.classList.toggle('off', !mus.on);
+    musicBtn.querySelector('.slabel').textContent = mus.on ? '음악 켜짐' : '음악 꺼짐';
   }
   soundBtn.addEventListener('click', function () {
     sfxOn = !sfxOn;
@@ -556,6 +631,13 @@
     if (sfxOn) { ensureAudio(); sfx.save(); }
     paintSound();
   });
+  musicBtn.addEventListener('click', function () {
+    mus.on = !mus.on;
+    store.set('pks-music', mus.on ? 'on' : 'off');
+    if (mus.on) { ensureAudio(); if (g && g.state === 'play') musicStart(); } else musicStop();
+    paintMusic();
+  });
+  paintMusic();
   paintSound();
 
   /* ---------- game state ---------- */
@@ -625,7 +707,7 @@
     g.lives--; g.shake = 12; g.flash = 1;
     burst(b.x, GOAL_Y, col.goal, 10);
     say('실점', b.x, GOAL_Y - 20, col.goal);
-    if (g.lives <= 0 && g.endT === null) { g.endT = 0.9; sfx.fail(); }
+    if (g.lives <= 0 && g.endT === null) { g.endT = 0.9; sfx.fail(); } else sfx.goal();
   }
 
   /* ---------- update ---------- */
@@ -790,6 +872,7 @@
     store.set('pks-team', teamSel.value);
     g = newGame();
     g.name = name; g.state = 'play';
+    musicStart();
     ov.hidden = true;
     hudKey = '';
     spawnRound();
@@ -808,6 +891,7 @@
   function finish() {
     var mine = g;
     g.state = 'over';
+    musicStop();
     var s = g.saves, kmh = g.maxKmh;
     var prev = Number(store.get('pks-best') || 0);
     if (s > prev) store.set('pks-best', String(s));
