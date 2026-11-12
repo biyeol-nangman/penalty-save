@@ -160,7 +160,15 @@
   .detail { margin: 0; color: var(--chalk-dim); font-size: 14px; }
   .status { margin: 0; min-height: 1.5em; font-size: 14px; }
 
-  .mods { margin: 10px 2px 0; font-size: 13px; color: var(--chalk-dim); }
+  .under { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 2px 0; }
+  .mods { margin: 0; font-size: 13px; color: var(--chalk-dim); min-width: 0; }
+  .sbtn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--panel); color: var(--chalk); border: 1px solid var(--rule); border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
+  .sbtn:hover { background: var(--panel-2); }
+  .sbtn:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  .sbtn .mute { display: none; }
+  .sbtn.off { color: var(--chalk-dim); }
+  .sbtn.off .waves { display: none; }
+  .sbtn.off .mute { display: inline; }
   .mods b { color: var(--chalk); font-weight: 500; }
   .hint { margin: 4px 2px 0; font-size: 12px; color: var(--chalk-dim); }
 
@@ -272,7 +280,17 @@
           </div>
         </div>
       </div>
-      <p class="mods">현재 슈팅 <b id="hMods">직선</b></p>
+      <div class="under">
+        <p class="mods">현재 슈팅 <b id="hMods">직선</b></p>
+        <button class="sbtn" id="soundBtn" type="button" aria-pressed="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
+            <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.8 6a8.5 8.5 0 0 1 0 12"/></g>
+            <g class="mute" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></g>
+          </svg>
+          <span class="slabel">소리 켜짐</span>
+        </button>
+      </div>
       <p class="hint">11m 거리의 패널티 스폿에서 슈팅이 날아옵니다.</p>
     </section>
 
@@ -489,6 +507,57 @@
     return m.join(' · ');
   }
 
+  /* ---------- sound: synthesised with Web Audio, no audio files ---------- */
+  var sfxOn = store.get('pks-sound') !== 'off';
+  var AC = window.AudioContext || window.webkitAudioContext, actx = null, master = null, noiseBuf = null;
+  function ensureAudio() {
+    if (!AC || !sfxOn) return;
+    try {
+      if (!actx) {
+        actx = new AC();
+        master = actx.createGain(); master.gain.value = 0.55; master.connect(actx.destination);
+        noiseBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.3), actx.sampleRate);
+        var d = noiseBuf.getChannelData(0);
+        for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (actx.state === 'suspended') actx.resume();
+    } catch (e) { actx = null; }
+  }
+  function tone(type, f0, f1, t0, dur, vol) {
+    var o = actx.createOscillator(), gn = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t0);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    gn.gain.setValueAtTime(0.0001, t0);
+    gn.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(gn); gn.connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(ftype, freq, t0, dur, vol) {
+    var src = actx.createBufferSource(), f = actx.createBiquadFilter(), gn = actx.createGain();
+    src.buffer = noiseBuf; f.type = ftype; f.frequency.value = freq;
+    gn.gain.setValueAtTime(vol, t0); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(gn); gn.connect(master); src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+  function play(fn) { if (!actx || !sfxOn) return; try { fn(actx.currentTime); } catch (e) {} }
+  var sfx = {
+    kick: function () { play(function (t) { tone('sine', 170, 55, t, 0.14, 0.9); noise('lowpass', 900, t, 0.07, 0.5); }); },
+    save: function () { play(function (t) { tone('triangle', 520, 780, t, 0.12, 0.45); tone('sine', 120, 70, t, 0.1, 0.5); noise('highpass', 2500, t, 0.05, 0.35); }); },
+    fail: function () { play(function (t) { [392, 349, 311, 247].forEach(function (f, i) { tone('triangle', f, f * 0.97, t + i * 0.2, i === 3 ? 0.7 : 0.19, 0.5); }); }); }
+  };
+  var soundBtn = $('soundBtn');
+  function paintSound() {
+    soundBtn.setAttribute('aria-pressed', sfxOn ? 'true' : 'false');
+    soundBtn.classList.toggle('off', !sfxOn);
+    soundBtn.querySelector('.slabel').textContent = sfxOn ? '소리 켜짐' : '소리 꺼짐';
+  }
+  soundBtn.addEventListener('click', function () {
+    sfxOn = !sfxOn;
+    store.set('pks-sound', sfxOn ? 'on' : 'off');
+    if (sfxOn) { ensureAudio(); sfx.save(); }
+    paintSound();
+  });
+  paintSound();
+
   /* ---------- game state ---------- */
   var g;
   function newGame() {
@@ -531,6 +600,7 @@
     var k = Math.round(v2 * KMH);
     if (k > g.maxKmh) g.maxKmh = k;
     g.kmh = k;
+    sfx.kick();
   }
 
   function burst(x, y, c, n) {
@@ -542,6 +612,7 @@
   function say(s, x, y, c) { g.texts.push({ s: s, x: clamp(x, 40, W - 40), y: y, c: c, t: 0 }); }
 
   function save(b) {
+    sfx.save();
     b.state = 'saved'; b.t = 0;
     b.vy = -Math.max(260, b.cur * 0.55);
     b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
@@ -554,7 +625,7 @@
     g.lives--; g.shake = 12; g.flash = 1;
     burst(b.x, GOAL_Y, col.goal, 10);
     say('실점', b.x, GOAL_Y - 20, col.goal);
-    if (g.lives <= 0 && g.endT === null) g.endT = 0.9;
+    if (g.lives <= 0 && g.endT === null) { g.endT = 0.9; sfx.fail(); }
   }
 
   /* ---------- update ---------- */
@@ -712,6 +783,7 @@
   function cleanName(s) { s = (s || '').replace(/\s+/g, ' ').trim().slice(0, 12); return s || '무명 키퍼'; }
 
   function startGame() {
+    ensureAudio();
     var name = cleanName(nick.value);
     nick.value = name === '무명 키퍼' && !nick.value.trim() ? '' : name;
     store.set('pks-name', nick.value);
