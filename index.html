@@ -278,7 +278,7 @@
 
     <aside class="rank" aria-label="순위표">
       <h2>순위표</h2>
-      <p class="sub">선방 횟수가 많은 순서입니다. 같으면 먼저 달성한 사람이 위에 옵니다.</p>
+      <p class="sub">선방 횟수가 많은 순서입니다. 같으면 먼저 달성한 사람이 위에 옵니다. 상위 5명만 보입니다.</p>
       <div class="podium" id="podium" hidden></div>
       <ol id="rows"><li class="empty">순위표를 불러오는 중입니다.</li></ol>
       <p class="mybest" id="localBest"></p>
@@ -917,9 +917,7 @@
     [1, 0, 2].forEach(function (i) { podiumEl.appendChild(slot(list[i] || null, i)); });
     var base = document.createElement('div'); base.className = 'podium-base'; podiumEl.appendChild(base);
 
-    list.slice(3, 15).forEach(function (r, i) { rowsEl.appendChild(row(r, i + 3)); });
-    var mi = list.findIndex(function (r) { return r.id === uid; });
-    if (mi >= 15) rowsEl.appendChild(row(list[mi], mi));
+    list.slice(3, 5).forEach(function (r, i) { rowsEl.appendChild(row(r, i + 3)); });
   }
 
   function refreshRank() {
