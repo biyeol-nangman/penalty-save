@@ -489,17 +489,6 @@
     p.fillStyle = col.chalk;
     [6, W - 6].forEach(function (px) { p.beginPath(); p.arc(px, GOAL_Y, 5, 0, Math.PI * 2); p.fill(); });
     p.beginPath(); p.arc(SPOT_X, SPOT_Y, 3.5, 0, Math.PI * 2); p.fill();
-    // 11 m dimension line
-    p.globalAlpha = 0.55; p.strokeStyle = col.chalk; p.lineWidth = 1.5;
-    p.beginPath();
-    p.moveTo(24, SPOT_Y); p.lineTo(24, GOAL_Y);
-    p.moveTo(19, SPOT_Y + 0.5); p.lineTo(29, SPOT_Y + 0.5);
-    p.moveTo(19, GOAL_Y - 0.5); p.lineTo(29, GOAL_Y - 0.5);
-    p.stroke();
-    p.fillStyle = col.chalk; p.font = '600 11px "Noto Sans KR", sans-serif';
-    p.textBaseline = 'middle'; p.textAlign = 'left';
-    p.fillText('11 m', 33, (SPOT_Y + GOAL_Y) / 2 - 40);
-    p.globalAlpha = 1;
   })();
 
   /* ---------- difficulty ---------- */
@@ -671,7 +660,10 @@
   // heart: blocking it gives one more chance (missing it costs nothing).
   // skull: blocking it costs one chance (letting it pass costs nothing).
   function spawnItem(kind, p) {
-    var ip = { speed: Math.min(p.speed * 0.85, 700), half: Math.min(p.half, 90), curve: 0, gw: p.gw, n: 1, burst: false };
+    // heart: slower and easy to read. skull: a little faster than the ball and aimed the same way, so it is easy to mistake for a shot.
+    var ip = kind === 'skull'
+      ? { speed: Math.min(p.speed * 1.15, 1000), half: p.half, curve: 0, gw: p.gw, n: 1, burst: false }
+      : { speed: Math.min(p.speed * 0.85, 700), half: Math.min(p.half, 90), curve: 0, gw: p.gw, n: 1, burst: false };
     g.n = 1;
     g.balls.push({
       kind: kind, state: 'wait', delay: 0.6, x: SPOT_X, y: SPOT_Y, vx: 0, ax: 0, v1: 0, v2: 0, d1: 0, cur: 0,
