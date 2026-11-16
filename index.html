@@ -268,7 +268,8 @@
             <ul class="rules">
               <li>방향키 또는 A·D, 터치·마우스로 골키퍼 이동</li>
               <li>레벨 4 커브 · 6 막판 가속 · 8 연속 슈팅</li>
-              <li>하트를 막으면 기회 +1 (최대 5), 해골은 피하세요 (막으면 기회 -1)</li>
+              <li>30선방부터 가끔 나오는 하트는 막으면 기회 +1 (최대 5)</li>
+              <li>해골은 피하세요 (막으면 기회 -1)</li>
             </ul>
           </div>
 
@@ -639,7 +640,7 @@
   function newGame() {
     var t = curTeam();
     return {
-      state: 'idle', name: '', level: 1, saves: 0, lives: 3, pips: 3, heartQueue: 0, since: 0,
+      state: 'idle', name: '', level: 1, saves: 0, lives: 3, pips: 3, since: 0,
       balls: [], parts: [], texts: [],
       shake: 0, flash: 0,
       gx: W / 2, tx: W / 2, gw: 112, tilt: 0, team: t, kick: kickColorFor(t),
@@ -656,7 +657,7 @@
     return true;
   }
 
-  // a heart (at 40 / 60 / 80 saves) or an occasional skull flies alone and never counts as a save.
+  // a skull, or a heart once the keeper has 30 saves, flies alone now and then and never counts as a save.
   // heart: blocking it gives one more chance (missing it costs nothing).
   // skull: blocking it costs one chance (letting it pass costs nothing).
   function spawnItem(kind, p) {
@@ -675,8 +676,8 @@
   function spawnRound() {
     var p = params(g.level), i;
     var kind = null;
-    if (g.heartQueue > 0) { kind = 'heart'; g.heartQueue--; }
-    else if (g.level >= 3 && g.since >= 3 && Math.random() < 0.25) kind = 'skull';
+    // every so often (not twice within 3 rounds) a bonus shot flies alone: a skull, or from 30 saves on sometimes a heart
+    if (g.level >= 3 && g.since >= 3 && Math.random() < 0.25) kind = (g.saves >= 30 && Math.random() < 0.4) ? 'heart' : 'skull';
     if (kind) { g.since = 0; spawnItem(kind, p); return; }
     g.since++;
     g.n = p.n;
@@ -745,7 +746,6 @@
     b.vy = -Math.max(260, b.cur * 0.55);
     b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
     g.saves++; g.level++;
-    if (g.saves === 40 || g.saves === 60 || g.saves === 80) g.heartQueue++;
     burst(b.x, GK_Y - GK_H / 2, col.lamp, 14);
     say('선방! 레벨 ' + g.level, g.gx, GK_Y - 28, col.lamp);
   }
