@@ -105,6 +105,8 @@
   .val { display: block; font-size: 30px; line-height: 1.15; }
   .pips { display: flex; justify-content: center; align-items: center; gap: 7px; height: 34px; }
   .pip { box-sizing: border-box; width: 14px; height: 14px; border-radius: 50%; background: var(--lamp); box-shadow: 0 0 10px var(--lamp-glow); }
+  .pips.n4, .pips.n5 { gap: 4px; }
+  .pips.n4 .pip, .pips.n5 .pip { width: 12px; height: 12px; }
   .pip.lost { background: transparent; border: 2px solid var(--rule); box-shadow: none; }
 
   .field {
@@ -233,7 +235,7 @@
 <main class="wrap">
   <header>
     <h1>패널티킥 세이브</h1>
-    <p class="lede">슈팅을 막을 때마다 레벨이 올라갑니다. 실점 3번이면 경기가 끝나고, 기록은 순위표에서 서로 비교합니다.</p>
+    <p class="lede">슈팅을 막을 때마다 레벨이 올라갑니다. 기회 3번을 모두 잃으면 경기가 끝나고, 기록은 순위표에서 서로 비교합니다.</p>
   </header>
 
   <div class="layout">
@@ -266,6 +268,7 @@
             <ul class="rules">
               <li>방향키 또는 A·D, 터치·마우스로 골키퍼 이동</li>
               <li>레벨 4 커브 · 6 막판 가속 · 8 연속 슈팅</li>
+              <li>하트를 막으면 기회 +1 (최대 5), 해골은 피하세요 (막으면 기회 -1)</li>
             </ul>
           </div>
 
@@ -337,7 +340,7 @@
     turfA: tok('--turf-a', '#1d6a38'), turfB: tok('--turf-b', '#195e31'),
     chalk: tok('--chalk', '#eef3ea'), lamp: tok('--lamp', '#ffbe3b'),
     kick: tok('--kick', '#e24b3d'), net: tok('--net', '#0a110d'),
-    goal: tok('--goal', '#ff6b57'), skin: tok('--skin', '#e8c8a2'), ink: tok('--ink', '#16201a')
+    goal: tok('--goal', '#ff6b57'), heart: '#ff5d7a', skin: tok('--skin', '#e8c8a2'), ink: tok('--ink', '#16201a')
   };
   var calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -554,6 +557,8 @@
   var sfx = {
     kick: function () { play(function (t) { tone('sine', 170, 55, t, 0.14, 0.9); noise('lowpass', 900, t, 0.07, 0.5); }); },
     save: function () { play(function (t) { tone('triangle', 520, 780, t, 0.12, 0.45); tone('sine', 120, 70, t, 0.1, 0.5); noise('highpass', 2500, t, 0.05, 0.35); }); },
+    item: function () { play(function (t) { tone('sine', 380, 900, t, 0.2, 0.5); noise('highpass', 3000, t, 0.06, 0.25); }); },
+    life: function () { play(function (t) { [523, 659, 784, 1047].forEach(function (f, i) { tone('triangle', f, f, t + i * 0.07, 0.18, 0.5); }); }); },
     goal: function () { play(function (t) { tone('sawtooth', 196, 98, t, 0.28, 0.4); noise('bandpass', 1200, t, 0.16, 0.4); tone('sine', 90, 50, t, 0.18, 0.6); }); },
     fail: function () { musicStop(); play(function (t) { [392, 349, 311, 247].forEach(function (f, i) { tone('triangle', f, f * 0.97, t + i * 0.2, i === 3 ? 0.7 : 0.19, 0.5); }); }); }
   };
@@ -645,7 +650,7 @@
   function newGame() {
     var t = curTeam();
     return {
-      state: 'idle', name: '', level: 1, saves: 0, lives: 3,
+      state: 'idle', name: '', level: 1, saves: 0, lives: 3, pips: 3, heartQueue: 0, since: 0,
       balls: [], parts: [], texts: [],
       shake: 0, flash: 0,
       gx: W / 2, tx: W / 2, gw: 112, tilt: 0, team: t, kick: kickColorFor(t),
@@ -654,8 +659,34 @@
   }
   g = newGame();
 
+  var LIVES_MAX = 5;
+  function gainLife() {
+    if (g.lives >= LIVES_MAX) return false;
+    if (g.lives >= g.pips) g.pips = Math.min(LIVES_MAX, g.lives + 1);
+    g.lives++;
+    return true;
+  }
+
+  // a heart (at 40 / 60 / 80 saves) or an occasional skull flies alone and never counts as a save.
+  // heart: blocking it gives one more chance (missing it costs nothing).
+  // skull: blocking it costs one chance (letting it pass costs nothing).
+  function spawnItem(kind, p) {
+    var ip = { speed: Math.min(p.speed * 0.85, 700), half: Math.min(p.half, 90), curve: 0, gw: p.gw, n: 1, burst: false };
+    g.n = 1;
+    g.balls.push({
+      kind: kind, state: 'wait', delay: 0.6, x: SPOT_X, y: SPOT_Y, vx: 0, ax: 0, v1: 0, v2: 0, d1: 0, cur: 0,
+      rot: 0, t: 0, trail: [], p: ip, dead: false
+    });
+    say(kind === 'heart' ? '하트 발사!' : '해골 조심!', SPOT_X, SPOT_Y + 36, kind === 'heart' ? col.heart : col.goal);
+  }
+
   function spawnRound() {
     var p = params(g.level), i;
+    var kind = null;
+    if (g.heartQueue > 0) { kind = 'heart'; g.heartQueue--; }
+    else if (g.level >= 3 && g.since >= 3 && Math.random() < 0.25) kind = 'skull';
+    if (kind) { g.since = 0; spawnItem(kind, p); return; }
+    g.since++;
     g.n = p.n;
     g.kmh = peakKmh(p);
     for (i = 0; i < p.n; i++) {
@@ -679,6 +710,7 @@
     b.ax = ax; b.v1 = v1; b.v2 = v2; b.d1 = d1; b.cur = v1;
     b.vx = (tx - SPOT_X) / T - 0.5 * ax * T;
     b.state = 'fly';
+    if (b.kind) { sfx.item(); return; }
     var k = Math.round(v2 * KMH);
     if (k > g.maxKmh) g.maxKmh = k;
     g.kmh = k;
@@ -693,16 +725,40 @@
   }
   function say(s, x, y, c) { g.texts.push({ s: s, x: clamp(x, 40, W - 40), y: y, c: c, t: 0 }); }
 
+  function itemSave(b) {
+    b.state = 'saved'; b.t = 0;
+    b.vy = -Math.max(260, b.cur * 0.55);
+    b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
+    if (b.kind === 'skull') {
+      burst(b.x, GK_Y - GK_H / 2, col.goal, 16);
+      g.lives--; g.shake = 12; g.flash = 1;
+      say('기회 -1', g.gx, GK_Y - 28, col.goal);
+      if (g.lives <= 0 && g.endT === null) { g.endT = 0.9; sfx.fail(); } else sfx.goal();
+      return;
+    }
+    burst(b.x, GK_Y - GK_H / 2, col.heart, 16);
+    if (gainLife()) { say('기회 +1', g.gx, GK_Y - 28, col.heart); sfx.life(); }
+    else { say('기회 최대', g.gx, GK_Y - 28, col.lamp); sfx.save(); }
+  }
+  function itemMiss(b) {
+    b.state = 'goal'; b.t = 0; b.vy = 140;
+    if (b.kind === 'skull') say('피했다!', b.x, GOAL_Y - 20, col.lamp);
+    else say('놓침', b.x, GOAL_Y - 20, 'rgba(238,243,234,0.75)');
+  }
+
   function save(b) {
+    if (b.kind) { itemSave(b); return; }
     sfx.save();
     b.state = 'saved'; b.t = 0;
     b.vy = -Math.max(260, b.cur * 0.55);
     b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
     g.saves++; g.level++;
+    if (g.saves === 40 || g.saves === 60 || g.saves === 80) g.heartQueue++;
     burst(b.x, GK_Y - GK_H / 2, col.lamp, 14);
     say('선방! 레벨 ' + g.level, g.gx, GK_Y - 28, col.lamp);
   }
   function concede(b) {
+    if (b.kind) { itemMiss(b); return; }
     b.state = 'goal'; b.t = 0; b.vy = 140;
     g.lives--; g.shake = 12; g.flash = 1;
     burst(b.x, GOAL_Y, col.goal, 10);
@@ -790,6 +846,34 @@
     ctx.restore();
   }
 
+  function drawItem(b) {
+    var x = b.x, y = b.y;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(x + 3, y + 5, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(12,19,15,0.75)';
+    if (b.kind === 'heart') {
+      var s = 9;
+      ctx.fillStyle = col.heart;
+      ctx.beginPath();
+      ctx.moveTo(x, y + s * 1.05);
+      ctx.bezierCurveTo(x - s * 1.7, y - s * 0.05, x - s * 0.95, y - s * 1.3, x, y - s * 0.4);
+      ctx.bezierCurveTo(x + s * 0.95, y - s * 1.3, x + s * 1.7, y - s * 0.05, x, y + s * 1.05);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath(); ctx.ellipse(x - 5, y - 4, 2.8, 1.7, -0.6, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#eef3ea';
+      ctx.beginPath(); ctx.arc(x, y - 2, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#eef3ea'; rr(x - 5.5, y + 4, 11, 8, 3);
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 5.5, y + 4, 11, 8, 3) : ctx.rect(x - 5.5, y + 4, 11, 8); ctx.stroke();
+      ctx.fillStyle = '#16201a';
+      circle(x - 4, y - 2.5, 3); circle(x + 4, y - 2.5, 3);
+      ctx.beginPath(); ctx.moveTo(x, y + 1); ctx.lineTo(x - 1.6, y + 4); ctx.lineTo(x + 1.6, y + 4); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = '#16201a';
+      ctx.beginPath(); ctx.moveTo(x - 2, y + 7); ctx.lineTo(x - 2, y + 11.5); ctx.moveTo(x + 2, y + 7); ctx.lineTo(x + 2, y + 11.5); ctx.stroke();
+    }
+  }
+
   function draw() {
     ctx.setTransform(SC, 0, 0, SC, 0, 0);
     ctx.clearRect(0, 0, W, H);
@@ -825,7 +909,7 @@
       }
       if (b.state === 'goal') ctx.globalAlpha = Math.max(0, 1 - b.t / 1.1);
       if (b.state === 'saved') ctx.globalAlpha = Math.max(0, 1 - b.t / 1.4);
-      drawBall(b);
+      if (b.kind) drawItem(b); else drawBall(b);
       ctx.globalAlpha = 1;
     }
 
@@ -848,14 +932,17 @@
 
   /* ---------- HUD ---------- */
   var hLevel = $('hLevel'), hSaves = $('hSaves'), hKmh = $('hKmh'), hMods = $('hMods');
-  var pips = $('hLives').children;
+  var pipsEl = $('hLives'), pips = pipsEl.children;
   var hudKey = '';
   function hud() {
-    var key = [g.level, g.saves, g.kmh, g.lives].join('|');
+    var key = [g.level, g.saves, g.kmh, g.lives, g.pips].join('|');
     if (key === hudKey) return;
     hudKey = key;
     hLevel.textContent = g.level; hSaves.textContent = g.saves; hKmh.textContent = g.kmh;
     hMods.textContent = modsText(params(g.level));
+    while (pipsEl.children.length < g.pips) { var np = document.createElement('span'); np.className = 'pip'; pipsEl.appendChild(np); }
+    while (pipsEl.children.length > g.pips) pipsEl.removeChild(pipsEl.lastChild);
+    pipsEl.className = 'pips' + (g.pips > 3 ? ' n' + g.pips : '');
     for (var i = 0; i < pips.length; i++) pips[i].classList.toggle('lost', i >= g.lives);
   }
 
