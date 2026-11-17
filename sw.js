@@ -1,7 +1,7 @@
 // 패널티킥 세이브 서비스 워커.
 // 게임 화면은 오프라인에서도 열리게 저장해 두고, 순위표(Supabase) 요청은 건드리지 않습니다.
 // 화면을 고쳐서 새로 배포했다면 아래 VERSION 숫자만 올리면 설치된 앱도 새 파일을 받습니다.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'penalty-save-' + VERSION;
 const SHELL = [
   './',

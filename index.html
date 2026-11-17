@@ -227,6 +227,16 @@
   .note { margin: 12px 0 0; font-size: 13px; color: var(--chalk-dim); }
   .mybest { margin: 4px 0 0; font-size: 13px; color: var(--chalk-dim); }
 
+  .modesw { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mbtn { display: grid; padding: 8px 6px; text-align: center; border-radius: 8px; border: 1px solid var(--rule); background: var(--net); color: var(--chalk); font: inherit; font-weight: 700; font-size: 15px; line-height: 1.25; cursor: pointer; }
+  .mbtn small { font-weight: 400; font-size: 11px; color: var(--chalk-dim); }
+  .mbtn.on { background: var(--lamp); color: var(--lamp-ink); border-color: var(--lamp); }
+  .mbtn.on small { color: var(--lamp-ink); opacity: 0.75; }
+  .tabs { display: flex; gap: 8px; margin: 0 0 10px; }
+  .tab { padding: 6px 18px; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); color: var(--chalk-dim); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .tab.on { background: var(--lamp); color: var(--lamp-ink); border-color: var(--lamp); }
+  .mbtn:focus-visible, .tab:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+
   @media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
 </style>
 
@@ -235,15 +245,15 @@
 <main class="wrap">
   <header>
     <h1>패널티킥 세이브</h1>
-    <p class="lede">슈팅을 막을 때마다 레벨이 올라갑니다. 기회 3번을 모두 잃으면 경기가 끝나고, 기록은 순위표에서 서로 비교합니다.</p>
+    <p class="lede">막기와 차기, 두 가지 방식으로 즐깁니다. 성공할 때마다 레벨이 올라가고, 기회 3번을 모두 잃으면 경기가 끝납니다. 기록은 방식별 순위표에서 서로 비교합니다.</p>
   </header>
 
   <div class="layout">
     <section class="stage" aria-label="게임">
       <div class="board" aria-live="off">
         <div class="cell"><span class="lab">레벨</span><span class="val led" id="hLevel">1</span></div>
-        <div class="cell"><span class="lab">선방</span><span class="val led" id="hSaves">0</span></div>
-        <div class="cell"><span class="lab">km/h</span><span class="val led" id="hKmh">33</span></div>
+        <div class="cell"><span class="lab" id="lSaves">선방</span><span class="val led" id="hSaves">0</span></div>
+        <div class="cell"><span class="lab" id="lKmh">km/h</span><span class="val led" id="hKmh">33</span></div>
         <div class="cell"><span class="lab">기회</span><div class="pips" id="hLives"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div></div>
       </div>
 
@@ -252,7 +262,11 @@
 
         <div class="overlay" id="ov">
           <div class="card" id="ovStart">
-            <h2>패널티킥을 막아라</h2>
+            <h2 id="ttl">패널티킥을 막아라</h2>
+            <div class="modesw" role="group" aria-label="게임 방식">
+              <button class="mbtn on" data-mode="save" aria-pressed="true" type="button">막기<small>골키퍼</small></button>
+              <button class="mbtn" data-mode="kick" aria-pressed="false" type="button">차기<small>키커</small></button>
+            </div>
             <div>
               <label class="flabel" for="nick">순위표에 표시할 이름</label>
               <input type="text" id="nick" maxlength="12" placeholder="이름 또는 닉네임" autocomplete="off">
@@ -265,7 +279,12 @@
               </div>
             </div>
             <button class="btn" id="startBtn" type="button">킥오프</button>
-            <ul class="rules">
+            <ul class="rules" id="rulesKick" hidden>
+              <li>화면을 끌어서 조준하고 손을 떼면 슛 (PC는 방향키 + 스페이스)</li>
+              <li>골을 넣을 때마다 골키퍼가 더 잘 읽습니다</li>
+              <li>구석을 노리되 골대 밖이나 골대에 맞으면 기회를 잃습니다</li>
+            </ul>
+            <ul class="rules" id="rulesSave">
               <li>방향키 또는 A·D, 터치·마우스로 골키퍼 이동</li>
               <li>레벨 4 커브 · 6 막판 가속 · 8 연속 슈팅</li>
               <li>30선방부터 가끔 나오는 하트는 막으면 기회 +1 (최대 5)</li>
@@ -275,7 +294,7 @@
 
           <div class="card" id="ovEnd" hidden>
             <h2>경기 종료</h2>
-            <div class="result"><span class="led" id="oSaves">0</span><span>선방</span></div>
+            <div class="result"><span class="led" id="oSaves">0</span><span id="oUnit">선방</span></div>
             <p class="detail" id="oDetail"></p>
             <p class="status" id="oStatus"></p>
             <div class="btnrow">
@@ -286,7 +305,7 @@
         </div>
       </div>
       <div class="under">
-        <p class="mods">현재 슈팅 <b id="hMods">직선</b></p>
+        <p class="mods"><span id="mLab">현재 슈팅</span> <b id="hMods">직선</b></p>
         <div class="sgroup">
           <button class="sbtn" id="soundBtn" type="button" aria-pressed="true">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -304,14 +323,22 @@
             </svg>
             <span class="slabel">음악 켜짐</span>
           </button>
+          <button class="sbtn" id="viewBtn" type="button" aria-pressed="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zm0 9l8-4.5M12 12v9M12 12L4 7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <span class="slabel">3D 화면</span>
+          </button>
         </div>
       </div>
-      <p class="hint">11m 거리의 패널티 스폿에서 슈팅이 날아옵니다.</p>
+      <p class="hint" id="hint">골키퍼 뒤에서 보는 화면입니다. 좌우로 움직여 슈팅을 막으세요.</p>
     </section>
 
     <aside class="rank" aria-label="순위표">
       <h2>순위표</h2>
-      <p class="sub">선방 횟수가 많은 순서입니다. 같으면 먼저 달성한 사람이 위에 옵니다. 상위 5명만 보입니다.</p>
+      <div class="tabs" role="group" aria-label="순위표 종류">
+        <button class="tab on" id="tabSave" data-rank="save" aria-pressed="true" type="button">막기</button>
+        <button class="tab" id="tabKick" data-rank="kick" aria-pressed="false" type="button">차기</button>
+      </div>
+      <p class="sub" id="rankSub">선방 횟수가 많은 순서입니다. 같으면 먼저 달성한 사람이 위에 옵니다. 상위 5명만 보입니다.</p>
       <div class="podium" id="podium" hidden></div>
       <ol id="rows"><li class="empty">순위표를 불러오는 중입니다.</li></ol>
       <p class="mybest" id="localBest"></p>
@@ -492,6 +519,250 @@
     p.beginPath(); p.arc(SPOT_X, SPOT_Y, 3.5, 0, Math.PI * 2); p.fill();
   })();
 
+  /* ---------- 3D scene: perspective is calculated by hand, no 3D library ---------- */
+  var GW = 3.66, GH = 2.44, SPOT_Z = 11, KEEP_Z = 0.45, NEAR = 0.25, TAU = Math.PI * 2;
+  var CAMS = {
+    // behind the keeper, high and looking down the pitch toward the penalty spot
+    save: { s: 1, y: 7, z: -3, pit: 0.65, half: 178, ref: [0.9, KEEP_Z], anchor: [KEEP_Z, 468] },
+    // behind the kicker, looking at the goal (like a broadcast penalty view)
+    kick: { s: -1, y: 3.5, z: 24, pit: 0.2, half: 128, ref: [1.2, 0], anchor: [0, 320] }
+  };
+  var cam = CAMS.save;
+  function camDepth(Y, Z) { return -(Y - cam.y) * cam.sp + cam.s * (Z - cam.z) * cam.cp; }
+  function setCam(mode) {
+    cam = CAMS[mode] || CAMS.save;
+    cam.cp = Math.cos(cam.pit); cam.sp = Math.sin(cam.pit);
+    cam.F = cam.half / GW * camDepth(cam.ref[0], cam.ref[1]);
+    cam.cy = 0;
+    cam.cy = cam.anchor[1] - P(0, 0, cam.anchor[0]).y;
+  }
+  function P(X, Y, Z) {
+    var ry = Y - cam.y, rz = cam.s * (Z - cam.z);
+    var up = ry * cam.cp + rz * cam.sp, d = -ry * cam.sp + rz * cam.cp;
+    var k = cam.F / Math.max(d, 0.05);
+    return { x: W / 2 + X * k, y: cam.cy - up * k, k: k, d: d };
+  }
+  function cpt(X, Y, Z) {
+    var ry = Y - cam.y, rz = cam.s * (Z - cam.z);
+    return { x: X, y: ry * cam.cp + rz * cam.sp, d: -ry * cam.sp + rz * cam.cp };
+  }
+  function clipNear(a) {
+    var out = [], n = a.length, i, p, q, t, pin, qin;
+    for (i = 0; i < n; i++) {
+      p = a[i]; q = a[(i + 1) % n]; pin = p.d >= NEAR; qin = q.d >= NEAR;
+      if (pin) out.push(p);
+      if (pin !== qin) { t = (NEAR - p.d) / (q.d - p.d); out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, d: NEAR }); }
+    }
+    return out;
+  }
+  function poly3(pts, fill) {
+    var a = [], i, c, k;
+    for (i = 0; i < pts.length; i++) a.push(cpt(pts[i][0], pts[i][1], pts[i][2]));
+    a = clipNear(a);
+    if (a.length < 3) return;
+    ctx.fillStyle = fill; ctx.beginPath();
+    for (i = 0; i < a.length; i++) {
+      c = a[i]; k = cam.F / c.d;
+      if (i) ctx.lineTo(W / 2 + c.x * k, cam.cy - c.y * k); else ctx.moveTo(W / 2 + c.x * k, cam.cy - c.y * k);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  // a line in the world; w is its width in metres (0 = a thin 1px line)
+  function line3(p, q, w, stroke) {
+    var a = cpt(p[0], p[1], p[2]), b = cpt(q[0], q[1], q[2]), t;
+    if (a.d < NEAR && b.d < NEAR) return;
+    if (a.d < NEAR) { t = (NEAR - a.d) / (b.d - a.d); a = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, d: NEAR }; }
+    else if (b.d < NEAR) { t = (NEAR - b.d) / (a.d - b.d); b = { x: b.x + (a.x - b.x) * t, y: b.y + (a.y - b.y) * t, d: NEAR }; }
+    var ka = cam.F / a.d, kb = cam.F / b.d;
+    ctx.strokeStyle = stroke; ctx.lineWidth = w ? Math.max(1, w * (ka + kb) / 2) : 1; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(W / 2 + a.x * ka, cam.cy - a.y * ka); ctx.lineTo(W / 2 + b.x * kb, cam.cy - b.y * kb); ctx.stroke();
+  }
+
+  setCam('save');
+
+  /* stands: a pre-drawn crowd picture, stretched behind the advertising boards */
+  var crowdImg = (function () {
+    var c = document.createElement('canvas'); c.width = 360; c.height = 200;
+    var x = c.getContext('2d'), g2 = x.createLinearGradient(0, 0, 0, 200), r, i, n, seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    g2.addColorStop(0, '#05080a'); g2.addColorStop(1, '#182234');
+    x.fillStyle = g2; x.fillRect(0, 0, 360, 200);
+    var pal = ['#c0392b', '#2c5fa8', '#e8e2d0', '#d9a441', '#3a3f4a', '#7a5642', '#2f7d5b', '#8e44ad'];
+    for (r = 0; r < 28; r++) {
+      var y = 4 + r * 6.9, a = 0.25 + 0.75 * (r / 28);
+      for (i = 0; i < 100; i++) {
+        var px = i * 3.7 + rnd() * 3 - (r % 2) * 1.8;
+        x.globalAlpha = a * (0.55 + rnd() * 0.45);
+        x.fillStyle = pal[(rnd() * pal.length) | 0];
+        x.fillRect(px, y, 3.2, 3.6);
+        x.fillStyle = '#d9b99a'; x.globalAlpha = a * 0.7;
+        x.fillRect(px + 0.7, y - 1.6, 1.8, 1.8);
+      }
+    }
+    x.globalAlpha = 1;
+    // floodlight glow and a few banners
+    var gl = x.createRadialGradient(60, 0, 2, 60, 0, 90); gl.addColorStop(0, 'rgba(255,245,210,0.55)'); gl.addColorStop(1, 'rgba(255,245,210,0)');
+    x.fillStyle = gl; x.fillRect(0, 0, 360, 200);
+    gl = x.createRadialGradient(300, 0, 2, 300, 0, 90); gl.addColorStop(0, 'rgba(255,245,210,0.45)'); gl.addColorStop(1, 'rgba(255,245,210,0)');
+    x.fillStyle = gl; x.fillRect(0, 0, 360, 200);
+    [[20, 150, '#c0392b', '#d9a441'], [120, 160, '#2c5fa8', '#e8e2d0'], [215, 148, '#d9a441', '#c0392b'], [300, 158, '#2f7d5b', '#e8e2d0']].forEach(function (f) {
+      x.globalAlpha = 0.85; x.fillStyle = f[2]; x.fillRect(f[0], f[1], 46, 18); x.fillStyle = f[3]; x.fillRect(f[0], f[1] + 6, 46, 5); x.globalAlpha = 1;
+    });
+    return c;
+  })();
+
+  var LINE_C = 'rgba(238,243,234,0.9)';
+  function gline(x0, z0, x1, z1) {
+    var dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, nx = -dz / L * 0.07, nz = dx / L * 0.07;
+    poly3([[x0 - nx, 0.01, z0 - nz], [x1 - nx, 0.01, z1 - nz], [x1 + nx, 0.01, z1 + nz], [x0 + nx, 0.01, z0 + nz]], LINE_C);
+  }
+
+  function stage3(kickM) {
+    var ZW = kickM ? -8 : SPOT_Z + 9;
+    var y0 = P(0, 0, ZW).y, y1 = P(0, 1.05, ZW).y, i, z, a;
+    ctx.fillStyle = '#05080a'; ctx.fillRect(0, 0, W, H);
+    var ch = Math.max(1, Math.min(y1, H));
+    ctx.drawImage(crowdImg, 0, 0, crowdImg.width, crowdImg.height, 0, 0, W, ch);
+    // advertising boards
+    ctx.fillStyle = '#0f2b52'; ctx.fillRect(0, y1, W, y0 - y1);
+    ctx.fillStyle = '#ffbe3b'; ctx.fillRect(0, y1, W, 1.5);
+    var bh = y0 - y1;
+    ctx.font = '900 ' + Math.max(8, bh * 0.62).toFixed(1) + 'px "Noto Sans KR", sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    var w1 = ctx.measureText('PENALTY ').width, w2 = ctx.measureText('SAVE').width, step = w1 + w2 + bh * 2, ax;
+    for (ax = 6; ax < W; ax += step) {
+      ctx.fillStyle = '#f4f4ee'; ctx.fillText('PENALTY', ax, y1 + bh / 2);
+      ctx.fillStyle = '#ffbe3b'; ctx.fillText('SAVE', ax + w1, y1 + bh / 2);
+    }
+    // turf
+    ctx.fillStyle = col.turfA; ctx.fillRect(0, y0, W, H - y0);
+    var zA = kickM ? ZW : -3, zB = kickM ? cam.z + 2 : ZW;
+    for (z = zA, i = 0; z < zB; z += 5.5, i++) {
+      if (i % 2) poly3([[-45, 0, z], [45, 0, z], [45, 0, Math.min(z + 5.5, zB)], [-45, 0, Math.min(z + 5.5, zB)]], col.turfB);
+    }
+    if (!kickM) {
+      // the keeper's own net floor behind the goal line
+      poly3([[-45, 0, -6], [45, 0, -6], [45, 0, 0], [-45, 0, 0]], 'rgba(6,10,8,0.92)');
+      for (a = -3.6; a <= 3.61; a += 0.6) line3([a, 0.02, -6], [a, 0.02, 0], 0, 'rgba(238,243,234,0.13)');
+      for (z = -0.6; z > -6; z -= 0.6) line3([-45, 0.02, z], [45, 0.02, z], 0, 'rgba(238,243,234,0.13)');
+    }
+    // markings
+    gline(-45, 0, 45, 0);
+    gline(-20.15, 16.5, 20.15, 16.5); gline(-20.15, 0, -20.15, 16.5); gline(20.15, 0, 20.15, 16.5);
+    gline(-9.16, 5.5, 9.16, 5.5); gline(-9.16, 0, -9.16, 5.5); gline(9.16, 0, 9.16, 5.5);
+    var pa = null, pb, ang;
+    for (ang = -0.93; ang <= 0.9301; ang += 0.1) {
+      pb = [9.15 * Math.sin(ang), 11 + 9.15 * Math.cos(ang)];
+      if (pa) gline(pa[0], pa[1], pb[0], pb[1]);
+      pa = pb;
+    }
+    var sp = [];
+    for (i = 0; i < 10; i++) sp.push([0.16 * Math.cos(i / 10 * TAU), 0.01, SPOT_Z + 0.16 * Math.sin(i / 10 * TAU)]);
+    poly3(sp, LINE_C);
+  }
+
+  function goal3() {
+    var D = 1.9, HB = 2.0, x, y, z, NETC = 'rgba(238,243,234,0.32)';
+    function hAt(zz) { return GH + (HB - GH) * (-zz / D); }
+    poly3([[-GW, 0, -D], [GW, 0, -D], [GW, HB, -D], [-GW, HB, -D]], 'rgba(5,9,7,0.6)');
+    poly3([[-GW, 0, 0], [-GW, 0, -D], [-GW, HB, -D], [-GW, GH, 0]], 'rgba(5,9,7,0.38)');
+    poly3([[GW, 0, 0], [GW, 0, -D], [GW, HB, -D], [GW, GH, 0]], 'rgba(5,9,7,0.38)');
+    poly3([[-GW, GH, 0], [GW, GH, 0], [GW, HB, -D], [-GW, HB, -D]], 'rgba(5,9,7,0.28)');
+    for (x = -GW; x <= GW + 0.01; x += 0.366) line3([x, 0, -D], [x, HB, -D], 0, NETC);
+    for (y = 0; y <= HB + 0.01; y += 0.3) line3([-GW, y, -D], [GW, y, -D], 0, NETC);
+    for (z = 0; z >= -D - 0.01; z -= 0.38) {
+      line3([-GW, 0, z], [-GW, hAt(z), z], 0, NETC); line3([GW, 0, z], [GW, hAt(z), z], 0, NETC);
+      line3([-GW, hAt(z), z], [GW, hAt(z), z], 0, NETC);
+    }
+    for (x = -GW; x <= GW + 0.01; x += 0.366) line3([x, GH, 0], [x, HB, -D], 0, NETC);
+    line3([-GW, GH, 0], [GW, GH, 0], 0.13, '#f4f4ee');
+    line3([-GW, 0, 0], [-GW, GH, 0], 0.13, '#f4f4ee');
+    line3([GW, 0, 0], [GW, GH, 0], 0.13, '#f4f4ee');
+  }
+
+  /* ---------- people: flat figures scaled by perspective, drawn in metres ---------- */
+  function limb(c, x0, y0, x1, y1, w, color, k) {
+    c.lineWidth = w + 1.6 / k; c.strokeStyle = 'rgba(12,19,15,0.55)';
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    c.lineWidth = w; c.strokeStyle = color;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+  }
+  function rbox(c, x, y, w, h, r, k) {
+    c.beginPath();
+    if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h);
+    c.fill(); c.lineWidth = 1 / k; c.strokeStyle = 'rgba(12,19,15,0.55)'; c.stroke();
+  }
+  // o: kit, back (true = seen from behind), gk, num, dx, lift, lean, legL/legR [xShift, lift], hands [[x,y],[x,y]]
+  function figure(sx, sy, k, o) {
+    var c = ctx, t = o.kit, fl, fr, hd, i, sd;
+    if (k < 1.5) return;
+    c.save(); c.translate(sx, sy); c.scale(k, k); c.lineJoin = 'round'; c.lineCap = 'round';
+    c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse((o.dx || 0) * 0.9, 0.02, 0.42, 0.12, 0, 0, TAU); c.fill();
+    c.translate(o.dx || 0, -(o.lift || 0));
+    if (o.lean) { c.translate(0, -0.9); c.rotate(o.lean); c.translate(0, 0.9); }
+    var lf = o.legL || [0, 0], rf = o.legR || [0, 0];
+    fl = [-0.13 + lf[0], -lf[1]]; fr = [0.13 + rf[0], -rf[1]];
+    limb(c, -0.11, -0.9, fl[0], fl[1] - 0.07, 0.15, t.socks, k);
+    limb(c, 0.11, -0.9, fr[0], fr[1] - 0.07, 0.15, t.socks, k);
+    c.fillStyle = '#111815';
+    c.beginPath(); c.ellipse(fl[0], fl[1] - 0.04, 0.1, 0.06, 0, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(fr[0], fr[1] - 0.04, 0.1, 0.06, 0, 0, TAU); c.fill();
+    c.fillStyle = t.shorts; rbox(c, -0.23, -1.04, 0.46, 0.36, 0.08, k);
+    hd = o.hands || [[-0.42, -0.85], [0.42, -0.85]];
+    for (i = 0; i < 2; i++) {
+      sd = i ? 1 : -1;
+      limb(c, sd * 0.27, -1.44, hd[i][0], hd[i][1], 0.13, t.sleeve, k);
+      c.fillStyle = o.gk ? '#f4f4ee' : col.skin;
+      c.beginPath(); c.arc(hd[i][0], hd[i][1], o.gk ? 0.1 : 0.065, 0, TAU); c.fill();
+      c.lineWidth = 1 / k; c.strokeStyle = 'rgba(12,19,15,0.5)'; c.stroke();
+    }
+    c.fillStyle = t.jersey; rbox(c, -0.25, -1.54, 0.5, 0.6, 0.1, k);
+    if (t.stripe) {
+      c.fillStyle = t.stripe;
+      [-0.17, -0.04, 0.09].forEach(function (bx) { c.fillRect(bx, -1.5, 0.08, 0.52); });
+    } else if (o.back && o.num != null) {
+      c.save(); c.scale(0.01, 0.01);
+      c.fillStyle = lum(t.jersey) > 0.6 ? '#16201a' : '#f4f4ee';
+      c.font = '900 30px "Noto Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(String(o.num), 0, -124);
+      c.restore();
+    }
+    c.fillStyle = col.skin; c.beginPath(); c.arc(0, -1.68, 0.125, 0, TAU); c.fill();
+    c.lineWidth = 1 / k; c.strokeStyle = 'rgba(12,19,15,0.5)'; c.stroke();
+    c.fillStyle = '#2a1c14';
+    c.beginPath();
+    if (o.back) c.arc(0, -1.69, 0.126, 0, TAU); else c.arc(0, -1.7, 0.126, Math.PI * 1.05, Math.PI * 1.95);
+    c.fill();
+    c.restore();
+  }
+
+  function runPose(tm, amp) {
+    var s = Math.sin(tm * 17), a = amp || 0.24;
+    return { legL: [0, a * Math.max(0, s)], legR: [0, a * Math.max(0, -s)], hands: [[-0.36, -0.95 + 0.2 * s], [0.36, -0.95 - 0.2 * s]], lift: 0.03 * Math.abs(s) };
+  }
+  function swingPose(u) {
+    var e = Math.sin(clamp(u, 0, 1) * Math.PI * 0.85);
+    return { legL: [0, 0], legR: [0.13 * e, 0.1 + 0.6 * e], hands: [[-0.58, -1.2], [0.5, -0.9 + 0.2 * e]], lean: 0.05 * e };
+  }
+  function kitFor(color) { return { jersey: color, sleeve: color, shorts: '#16201a', socks: color, stripe: null }; }
+  var GK_KIT = { jersey: '#2fbf86', sleeve: '#2fbf86', shorts: '#16201a', socks: '#2fbf86', stripe: null };
+
+  function ballShadow(X, Z, r) {
+    var p = P(X, 0, Z);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 1.05, r * 0.5, 0, 0, TAU); ctx.fill();
+  }
+  function ball3(sx, sy, r, rot) {
+    ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(sx, sy, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(12,19,15,0.6)'; ctx.lineWidth = Math.max(1, r * 0.14); ctx.stroke();
+    if (r < 4) return;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(rot); ctx.fillStyle = col.ink;
+    var i, a, q = r / 9;
+    ctx.beginPath();
+    for (i = 0; i < 5; i++) { a = i / 5 * TAU; if (i) ctx.lineTo(Math.cos(a) * 3.3 * q, Math.sin(a) * 3.3 * q); else ctx.moveTo(Math.cos(a) * 3.3 * q, Math.sin(a) * 3.3 * q); }
+    ctx.closePath(); ctx.fill();
+    for (i = 0; i < 5; i++) { a = i / 5 * TAU + 0.63; ctx.beginPath(); ctx.arc(Math.cos(a) * 6.6 * q, Math.sin(a) * 6.6 * q, 1.5 * q, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+
   /* ---------- difficulty ---------- */
   function params(L) {
     return {
@@ -636,6 +907,8 @@
   paintSound();
 
   /* ---------- game state ---------- */
+  var MODES = { save: { col: 'scores', unit: '선방' }, kick: { col: 'scores_kick', unit: '골' } };
+  var selMode = store.get('pks-mode') === 'kick' ? 'kick' : 'save', rankMode = selMode;
   var g;
   function newGame() {
     var t = curTeam();
@@ -644,7 +917,10 @@
       balls: [], parts: [], texts: [],
       shake: 0, flash: 0,
       gx: W / 2, tx: W / 2, gw: 112, tilt: 0, team: t, kick: kickColorFor(t),
-      nextT: -1, endT: null, kmh: peakKmh(params(1)), maxKmh: 0, n: 1, first: true
+      nextT: -1, endT: null, kmh: peakKmh(params(1)), maxKmh: 0, n: 1, first: true,
+      mode: selMode, phase: 'aim', pt: 0, aim: { X: 0, Y: 1.0 }, shot: null, kd: null, kdt: 99, arcA: 0.3,
+      bl: { x: 0, y: 0.11, z: SPOT_Z, rot: 0, vx: 0, vy: 0, vz: 0 }, streak: 0, maxStreak: 0, rounds: 0, res: null,
+      clock: 0, kt: 9, dive: null, pd: null
     };
   }
   g = newGame();
@@ -668,7 +944,7 @@
     g.n = 1;
     g.balls.push({
       kind: kind, state: 'wait', delay: 0.6, x: SPOT_X, y: SPOT_Y, vx: 0, ax: 0, v1: 0, v2: 0, d1: 0, cur: 0,
-      rot: 0, t: 0, trail: [], p: ip, dead: false
+      rot: 0, t: 0, trail: [], p: ip, dead: false, h: rand(0.3, 1.0)
     });
     say(kind === 'heart' ? '하트 발사!' : '해골 조심!', SPOT_X, SPOT_Y + 36, kind === 'heart' ? col.heart : col.goal);
   }
@@ -686,7 +962,7 @@
       g.balls.push({
         state: 'wait', delay: (g.first ? 1.1 : 0.4) + i * 0.5,
         x: SPOT_X, y: SPOT_Y, vx: 0, ax: 0, v1: 0, v2: 0, d1: 0, cur: 0,
-        rot: Math.random() * 6, t: 0, trail: [], p: p, dead: false
+        rot: Math.random() * 6, t: 0, trail: [], p: p, dead: false, h: rand(0.25, 1.1)
       });
     }
     g.first = false;
@@ -702,7 +978,7 @@
     var ax = p.curve ? (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 1) * p.curve : 0;
     b.ax = ax; b.v1 = v1; b.v2 = v2; b.d1 = d1; b.cur = v1;
     b.vx = (tx - SPOT_X) / T - 0.5 * ax * T;
-    b.state = 'fly';
+    b.state = 'fly'; g.kt = 0;
     if (b.kind) { sfx.item(); return; }
     var k = Math.round(v2 * KMH);
     if (k > g.maxKmh) g.maxKmh = k;
@@ -711,15 +987,19 @@
   }
 
   function burst(x, y, c, n) {
+    if (g.mode === 'save' && use3()) { var s0 = scr3(x, y, 0.8); x = s0.x; y = s0.y; }
     for (var i = 0; i < n; i++) {
       var a = rand(0, Math.PI * 2), s = rand(60, 220);
       g.parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, c: c });
     }
   }
-  function say(s, x, y, c) { g.texts.push({ s: s, x: clamp(x, 40, W - 40), y: y, c: c, t: 0 }); }
+  function say(s, x, y, c) {
+    if (g.mode === 'save' && use3()) { var s1 = scr3(x, y, 2.3); x = s1.x; y = s1.y; }
+    g.texts.push({ s: s, x: clamp(x, 40, W - 40), y: y, c: c, t: 0 });
+  }
 
   function itemSave(b) {
-    b.state = 'saved'; b.t = 0;
+    b.state = 'saved'; b.t = 0; g.dive = { t: 0, dir: b.x >= g.gx ? 1 : -1 };
     b.vy = -Math.max(260, b.cur * 0.55);
     b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
     if (b.kind === 'skull') {
@@ -742,7 +1022,7 @@
   function save(b) {
     if (b.kind) { itemSave(b); return; }
     sfx.save();
-    b.state = 'saved'; b.t = 0;
+    b.state = 'saved'; b.t = 0; g.dive = { t: 0, dir: b.x >= g.gx ? 1 : -1 };
     b.vy = -Math.max(260, b.cur * 0.55);
     b.vx = clamp((b.x - g.gx) / (g.gw / 2) * 340 + b.vx * 0.25, -420, 420);
     g.saves++; g.level++;
@@ -759,7 +1039,7 @@
   }
 
   /* ---------- update ---------- */
-  var keys = { left: false, right: false };
+  var keys = { left: false, right: false, up: false, down: false };
   function update(dt) {
     var dir = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
     if (g.state === 'play' && dir) g.tx += dir * 620 * dt;
@@ -773,6 +1053,8 @@
       g.tilt += (want - g.tilt) * Math.min(1, dt * 12);
     }
 
+    g.clock += dt; g.kt += dt;
+    if (g.dive) { g.dive.t += dt; if (g.dive.t > 0.5) g.dive = null; }
     if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 40);
     if (g.flash > 0) g.flash = Math.max(0, g.flash - dt * 2.2);
 
@@ -808,11 +1090,14 @@
     g.texts = g.texts.filter(function (s) { return s.t < 0.9; });
 
     if (g.state === 'play') {
-      var active = g.balls.some(function (x) { return x.state === 'wait' || x.state === 'fly'; });
-      if (!active && g.lives > 0 && g.endT === null) {
-        if (g.nextT < 0) g.nextT = 0.8;
-        g.nextT -= dt;
-        if (g.nextT <= 0) { g.nextT = -1; spawnRound(); }
+      if (g.mode === 'kick') updateKick(dt);
+      else {
+        var active = g.balls.some(function (x) { return x.state === 'wait' || x.state === 'fly'; });
+        if (!active && g.lives > 0 && g.endT === null) {
+          if (g.nextT < 0) g.nextT = 0.8;
+          g.nextT -= dt;
+          if (g.nextT <= 0) { g.nextT = -1; spawnRound(); }
+        }
       }
       if (g.endT !== null) { g.endT -= dt; if (g.endT <= 0) { g.endT = null; finish(); } }
     }
@@ -866,7 +1151,7 @@
     }
   }
 
-  function draw() {
+  function draw2d() {
     ctx.setTransform(SC, 0, 0, SC, 0, 0);
     ctx.clearRect(0, 0, W, H);
     var sx = 0, sy = 0;
@@ -922,16 +1207,284 @@
     ctx.restore();
   }
 
+  /* ---------- 3D views and the kicking mode ---------- */
+  var view3d = store.get('pks-view') !== '2d';
+  function use3() { return g.mode === 'kick' || view3d; }
+  function scr3(x, y, h) { return P((x - SPOT_X) / 180 * GW, h, (GOAL_Y - y) / (GOAL_Y - SPOT_Y) * SPOT_Z); }
+  function ease(u) { u = clamp(u, 0, 1); return 1 - (1 - u) * (1 - u); }
+  function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) / 0.5; }
+
+  var RUN_T = 0.55, FLY_T = 0.62;
+  var ZONES = [[-2.0, 0.55], [0, 0.9], [2.0, 0.55], [-2.0, 1.6], [2.0, 1.6], [0, 1.5]];
+  function keeperSkill(L) {
+    return { read: Math.min(0.2 + 0.05 * (L - 1), 0.8), react: Math.max(0.03, 0.2 - 0.012 * (L - 1)), sigma: Math.max(0.14, 0.45 - 0.02 * (L - 1)) };
+  }
+
+  function shoot() {
+    if (g.mode !== 'kick' || g.state !== 'play' || g.phase !== 'aim') return;
+    g.phase = 'run'; g.pt = 0; g.rounds++;
+    g.shot = { X: g.aim.X, Y: g.aim.Y };
+  }
+  function kickContact() {
+    var sk = keeperSkill(g.level), s = g.shot, kx, ky, z;
+    if (Math.random() < sk.read) { kx = s.X + gauss() * sk.sigma; ky = s.Y + gauss() * sk.sigma * 0.8; }
+    else { z = ZONES[(Math.random() * ZONES.length) | 0]; kx = z[0]; ky = z[1]; }
+    kx = clamp(kx, -2.3, 2.3); ky = clamp(ky, 0.35, 1.95);
+    g.kd = { x: kx, y: ky, react: sk.react, dur: 0.42 };
+    g.kdt = 0; g.arcA = 0.08 + 0.45 * clamp(s.Y / 2, 0, 1);
+    g.phase = 'fly'; g.pt = 0;
+    g.bl = { x: 0, y: 0.11, z: SPOT_Z, rot: 0, vx: 0, vy: 0, vz: 0 };
+    g.kmh = Math.round(SPOT_Z / FLY_T * 3.6);
+    sfx.kick();
+  }
+  function kickResolve() {
+    var s = g.shot, kd = g.kd, bl = g.bl, ax = Math.abs(s.X), res, T = FLY_T;
+    var postX = Math.abs(ax - GW) < 0.12 && s.Y >= 0 && s.Y <= GH + 0.1;
+    var postY = Math.abs(s.Y - GH) < 0.12 && ax <= GW + 0.1;
+    if (postX || postY) res = 'post';
+    else if (ax > GW || s.Y > GH || s.Y < 0) res = 'wide';
+    else if (Math.hypot(s.X - kd.x, s.Y - kd.y) <= 0.95) res = 'saved';
+    else res = 'goal';
+    g.res = res; g.phase = 'after'; g.pt = 0;
+    bl.vx = s.X / T; bl.vy = ((s.Y - 0.11) - g.arcA * Math.PI) / T; bl.vz = -SPOT_Z / T;
+    var sc = P(clamp(s.X, -5, 5), clamp(s.Y, 0, 3.4), 0), lost = true;
+    if (res === 'goal') {
+      lost = false;
+      bl.vx *= 0.3; bl.vz *= 0.3;
+      g.saves++; g.streak++; if (g.streak > g.maxStreak) g.maxStreak = g.streak; g.level++;
+      burstS(sc.x, sc.y, col.lamp, 22);
+      sayS('골!', W / 2, 150, col.lamp);
+      sfx.save();
+    } else if (res === 'saved') {
+      bl.vx = (kd.x >= s.X ? -1 : 1) * 2.6 + gauss() * 0.6; bl.vy = 2.6; bl.vz = 5;
+      burstS(sc.x, sc.y, col.chalk, 12);
+      sayS('선방당했다', W / 2, 150, col.goal);
+    } else if (res === 'post') {
+      bl.vx = -(s.X >= 0 ? 1 : -1) * 2.2; bl.vz = 5.5; bl.vy = 3;
+      burstS(sc.x, sc.y, col.chalk, 12);
+      sayS('골대를 맞았다!', W / 2, 150, col.goal);
+    } else {
+      sayS(s.Y > GH ? '골대 위로 넘어갔다' : '골대 밖', W / 2, 150, col.goal);
+    }
+    if (lost) {
+      g.lives--; g.streak = 0; g.shake = 9;
+      if (g.lives <= 0 && g.endT === null) { g.endT = 1.5; sfx.fail(); } else sfx.goal();
+    }
+  }
+  function kickNext() {
+    g.phase = 'aim'; g.pt = 0; g.kd = null; g.kdt = 99; g.res = null;
+    g.bl = { x: 0, y: 0.11, z: SPOT_Z, rot: 0, vx: 0, vy: 0, vz: 0 };
+    g.aim = { X: 0, Y: 1.0 };
+  }
+  function updateKick(dt) {
+    var bl = g.bl, ph = g.phase, p, s;
+    g.kdt += dt; g.pt += dt;
+    if (ph === 'aim') {
+      var dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
+      g.aim.X = clamp(g.aim.X + dx * 3.2 * dt, -4.6, 4.6);
+      g.aim.Y = clamp(g.aim.Y + dy * 2.2 * dt, 0.1, 3.3);
+    } else if (ph === 'run') {
+      if (g.pt >= RUN_T) kickContact();
+    } else if (ph === 'fly') {
+      p = Math.min(1, g.pt / FLY_T); s = g.shot;
+      bl.x = s.X * p; bl.z = SPOT_Z * (1 - p);
+      bl.y = 0.11 + (s.Y - 0.11) * p + g.arcA * Math.sin(Math.PI * p);
+      bl.rot += dt * 16;
+      if (g.pt >= FLY_T) kickResolve();
+    } else if (ph === 'after') {
+      bl.vy -= 9.8 * dt;
+      bl.x += bl.vx * dt; bl.y += bl.vy * dt; bl.z += bl.vz * dt; bl.rot += dt * 10;
+      if (bl.y < 0.11) { bl.y = 0.11; bl.vy = -bl.vy * 0.45; bl.vx *= 0.8; bl.vz *= 0.8; }
+      if (g.res === 'goal' && bl.z < -1.55) { bl.z = -1.55; bl.vz = 0; bl.vx *= 0.3; }
+      if (bl.z < -7) { bl.z = -7; bl.vz = 0; }
+      if (bl.z > 14) { bl.z = 14; bl.vz = 0; }
+      if (g.pt > 1.7 && g.endT === null) { if (g.lives > 0) kickNext(); else g.phase = 'over'; }
+    }
+  }
+
+  function burstS(x, y, c, n) {
+    for (var i = 0; i < n; i++) {
+      var a = rand(0, TAU), s = rand(60, 220);
+      g.parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, c: c });
+    }
+  }
+  function sayS(s, x, y, c) { g.texts.push({ s: s, x: clamp(x, 40, W - 40), y: y, c: c, t: 0 }); }
+
+  function drawFx() {
+    var i, q, s;
+    for (i = 0; i < g.parts.length; i++) {
+      q = g.parts[i];
+      ctx.globalAlpha = Math.max(0, 1 - q.t / 0.6); ctx.fillStyle = q.c; circle(q.x, q.y, 2.6);
+    }
+    ctx.globalAlpha = 1;
+    ctx.font = '700 17px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (i = 0; i < g.texts.length; i++) {
+      s = g.texts[i];
+      ctx.globalAlpha = Math.max(0, 1 - s.t / (g.mode === 'kick' ? 1.4 : 0.9));
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,19,15,0.75)'; ctx.strokeText(s.s, s.x, s.y);
+      ctx.fillStyle = s.c; ctx.fillText(s.s, s.x, s.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* --- save mode (behind the keeper) --- */
+  function saveBallPos(b) {
+    var prog = clamp((b.y - SPOT_Y) / (GOAL_Y - SPOT_Y), 0, 1.1), h = b.h == null ? 0.6 : b.h;
+    var Y = 0.11 + (h - 0.11) * prog + 0.5 * Math.sin(Math.PI * clamp(prog, 0, 1));
+    if (b.state === 'saved') Y += 0.9 * Math.sin(Math.PI * Math.min(1, b.t / 0.8));
+    return { X: (b.x - SPOT_X) / 180 * GW, Y: Y, Z: (GOAL_Y - b.y) / (GOAL_Y - SPOT_Y) * SPOT_Z };
+  }
+  function ballR(k) { return clamp(Math.max(3.2, 0.25 * k), 3.2, 26); }
+
+  function keeperSave() {
+    var X = (g.gx - SPOT_X) / 180 * GW, p = P(X, 0, KEEP_Z), hh = clamp(g.gw / 2 / 180 * GW, 0.45, 1.3);
+    var o = { kit: g.team, back: true, gk: true, num: 1, lean: clamp(g.tilt * 2.4, -0.55, 0.55), hands: [[-hh, -1.12], [hh, -1.12]] };
+    if (g.dive) {
+      var u = Math.sin(clamp(g.dive.t / 0.5, 0, 1) * Math.PI), d = g.dive.dir;
+      o.lean = d * 1.05 * u + o.lean * (1 - u); o.dx = d * 0.45 * u; o.lift = 0.3 * u;
+      o.hands = [[-hh * (1 - u) - 0.3 * u, -1.12 - 0.95 * u], [hh * (1 - u) + 0.3 * u, -1.12 - 0.95 * u]];
+    }
+    figure(p.x, p.y, p.k, o);
+  }
+  function kickerSave() {
+    var wait = null, i, b, RUN = 0.4, x = -1.0, z = 14.6, o, u;
+    for (i = 0; i < g.balls.length; i++) {
+      b = g.balls[i];
+      if (b.state === 'wait' && g.state === 'play' && (wait === null || b.delay < wait)) wait = b.delay;
+    }
+    if (wait !== null && wait <= RUN) { u = 1 - wait / RUN; x = -1.0 + 0.85 * u; z = 14.6 - 3.0 * u; o = runPose(g.clock); }
+    else if (g.kt < 0.45) { x = -0.15; z = 11.6; o = swingPose(g.kt / 0.35); }
+    else if (g.kt < 1.2) { u = (g.kt - 0.45) / 0.75; x = -0.15 - 0.85 * u; z = 11.6 + 3.0 * u; o = runPose(g.clock, 0.12); }
+    else o = { hands: [[-0.42, -0.9], [0.42, -0.9]] };
+    o.kit = kitFor(g.kick); o.back = false;
+    var p = P(x, 0, z);
+    figure(p.x, p.y, p.k, o);
+  }
+  function drawSave3() {
+    var i, k, b, list = [], pos, s, r, keeperDone = false;
+    kickerSave();
+    for (i = 0; i < g.balls.length; i++) { pos = saveBallPos(g.balls[i]); list.push({ b: g.balls[i], pos: pos }); }
+    list.sort(function (a, c) { return c.pos.Z - a.pos.Z; });
+    function one(e) {
+      b = e.b; pos = e.pos; s = P(pos.X, pos.Y, pos.Z); r = ballR(s.k);
+      if (b.state === 'fly') {
+        ctx.fillStyle = col.chalk;
+        for (k = 0; k < b.trail.length; k++) {
+          var tp = saveBallPos({ x: b.trail[k].x, y: b.trail[k].y, h: b.h, state: 'fly', t: 0 }), ts = P(tp.X, tp.Y, tp.Z);
+          ctx.globalAlpha = (k / b.trail.length) * 0.2;
+          ctx.beginPath(); ctx.arc(ts.x, ts.y, r * (0.4 + 0.6 * k / b.trail.length), 0, TAU); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (b.state === 'wait' && g.state === 'play' && b.delay < 0.4 && b.delay > 0) {
+        ctx.strokeStyle = col.lamp; ctx.globalAlpha = 0.7 * (1 - b.delay / 0.4); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, r + 3 + (b.delay / 0.4) * 10, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      if (b.state === 'goal') ctx.globalAlpha = Math.max(0, 1 - b.t / 1.1);
+      if (b.state === 'saved') ctx.globalAlpha = Math.max(0, 1 - b.t / 1.4);
+      ballShadow(pos.X, pos.Z, r);
+      if (b.kind) { var m = r * 1.15 / 10; ctx.save(); ctx.translate(s.x, s.y); ctx.scale(m, m); ctx.translate(-b.x, -b.y); drawItem(b); ctx.restore(); }
+      else ball3(s.x, s.y, r, b.rot);
+      ctx.globalAlpha = 1;
+    }
+    for (i = 0; i < list.length; i++) {
+      if (!keeperDone && list[i].pos.Z <= KEEP_Z) { keeperSave(); keeperDone = true; }
+      one(list[i]);
+    }
+    if (!keeperDone) keeperSave();
+  }
+
+  /* --- kick mode (behind the kicker) --- */
+  function keeperKick() {
+    var kd = g.kd, p = P(0, 0, KEEP_Z), u = 0, o = { kit: GK_KIT, gk: true, back: false, hands: [[-0.62, -1.12], [0.62, -1.12]] };
+    var bob = 0.025 * Math.sin(g.clock * 6);
+    if (kd) {
+      u = ease((g.kdt - kd.react) / kd.dur);
+      var dir = kd.x > 0.3 ? 1 : (kd.x < -0.3 ? -1 : 0), hi = clamp((kd.y - 0.5) / 1.4, 0, 1);
+      o.dx = kd.x * 0.7 * u; o.lean = dir * clamp(Math.abs(kd.x) / 2.3, 0, 1) * 1.0 * u;
+      o.lift = clamp(kd.y - 0.8, 0, 1.2) * 0.35 * u;
+      o.hands = [[-0.62 - (0.3 - 0.62) * 0 - u * (0.62 - 0.3) * hi - u * 0.3 * (1 - hi), -1.12 - u * (0.95 * hi - 0.15 * (1 - hi))],
+                 [0.62 - u * (0.62 - 0.3) * hi + u * 0.3 * (1 - hi), -1.12 - u * (0.95 * hi - 0.15 * (1 - hi))]];
+    } else o.lift = Math.max(0, bob);
+    figure(p.x, p.y, p.k, o);
+  }
+  function kickerKick() {
+    var x = -1.2, z = 14.2, o, ph = g.phase, u, e;
+    if (ph === 'run') { u = clamp(g.pt / RUN_T, 0, 1); e = u * u * (3 - 2 * u); x = -1.2 + 0.9 * e; z = 14.2 - 2.65 * e; o = runPose(g.pt, 0.26); }
+    else if (ph === 'fly' || ph === 'after' || ph === 'over') {
+      x = -0.3; z = 11.55; o = swingPose(g.kdt / 0.4);
+      if (ph === 'after' && g.kdt > 1.0 && g.lives > 0) { u = clamp((g.kdt - 1.0) / 0.6, 0, 1); x = -0.3 - 0.9 * u; z = 11.55 + 2.65 * u; o = runPose(g.clock, 0.1); }
+    } else o = { hands: [[-0.42, -0.9], [0.42, -0.9]] };
+    o.kit = g.team; o.back = true; o.num = 11;
+    var p = P(x, 0, z);
+    figure(p.x, p.y, p.k, o);
+  }
+  function drawAim() {
+    if (g.phase !== 'aim' || g.state !== 'play') return;
+    var a = g.aim, p = P(a.X, a.Y, 0), r = 0.3 * p.k, b = P(0, 0.11, SPOT_Z);
+    var inside = Math.abs(a.X) <= GW && a.Y <= GH && a.Y >= 0.05, pu = 1 + 0.08 * Math.sin(g.clock * 8), c = inside ? col.lamp : col.goal;
+    ctx.save();
+    ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(238,243,234,0.4)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(12,19,15,0.7)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * pu, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = c; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * pu, 0, TAU); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x - r * 1.7, p.y); ctx.lineTo(p.x - r * 0.6, p.y); ctx.moveTo(p.x + r * 0.6, p.y); ctx.lineTo(p.x + r * 1.7, p.y);
+    ctx.moveTo(p.x, p.y - r * 1.7); ctx.lineTo(p.x, p.y - r * 0.6); ctx.moveTo(p.x, p.y + r * 0.6); ctx.lineTo(p.x, p.y + r * 1.7);
+    ctx.stroke();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, TAU); ctx.fill();
+    ctx.restore();
+    if (g.rounds < 3) {
+      ctx.font = '700 14px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,19,15,0.8)'; ctx.fillStyle = col.chalk;
+      var msg = '화면을 끌어서 조준 · 손을 떼면 슛';
+      ctx.strokeText(msg, W / 2, H - 22); ctx.fillText(msg, W / 2, H - 22);
+    }
+  }
+  function drawKick3() {
+    var bl = g.bl, s, r, behind = bl.z < KEEP_Z - 0.1 && g.phase === 'after';
+    goal3();
+    function ballDraw() {
+      s = P(bl.x, bl.y, bl.z); r = clamp(0.13 * s.k, 3.4, 22);
+      ballShadow(bl.x, bl.z, r); ball3(s.x, s.y, r, bl.rot);
+    }
+    if (behind) ballDraw();
+    keeperKick();
+    if (!behind) ballDraw();
+    kickerKick();
+    drawAim();
+  }
+
+  function draw3() {
+    var km = g.mode === 'kick';
+    if (cam !== CAMS[g.mode]) setCam(g.mode);
+    ctx.setTransform(SC, 0, 0, SC, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var sx = 0, sy = 0;
+    if (g.shake > 0 && !calm) { sx = (Math.random() - 0.5) * g.shake; sy = (Math.random() - 0.5) * g.shake; }
+    ctx.save(); ctx.translate(sx, sy);
+    stage3(km);
+    if (km) drawKick3(); else drawSave3();
+    drawFx();
+    if (g.flash > 0) { ctx.fillStyle = 'rgba(255,107,87,' + (g.flash * 0.3).toFixed(3) + ')'; ctx.fillRect(-10, -10, W + 20, H + 20); }
+    ctx.restore();
+  }
+  function draw() { if (use3()) draw3(); else draw2d(); }
+
   /* ---------- HUD ---------- */
-  var hLevel = $('hLevel'), hSaves = $('hSaves'), hKmh = $('hKmh'), hMods = $('hMods');
+  var hLevel = $('hLevel'), hSaves = $('hSaves'), hKmh = $('hKmh'), hMods = $('hMods'), lSaves = $('lSaves'), lKmh = $('lKmh'), mLab = $('mLab');
   var pipsEl = $('hLives'), pips = pipsEl.children;
   var hudKey = '';
   function hud() {
-    var key = [g.level, g.saves, g.kmh, g.lives, g.pips].join('|');
+    var km = g.mode === 'kick';
+    var key = [g.mode, g.level, g.saves, km ? g.streak : g.kmh, g.lives, g.pips].join('|');
     if (key === hudKey) return;
     hudKey = key;
-    hLevel.textContent = g.level; hSaves.textContent = g.saves; hKmh.textContent = g.kmh;
-    hMods.textContent = modsText(params(g.level));
+    lSaves.textContent = km ? '골' : '선방'; lKmh.textContent = km ? '연속' : 'km/h'; mLab.textContent = km ? '골키퍼' : '현재 슈팅';
+    hLevel.textContent = g.level; hSaves.textContent = g.saves; hKmh.textContent = km ? g.streak : g.kmh;
+    hMods.textContent = km ? '판단력 ' + Math.round(keeperSkill(g.level).read * 100) + '%' : modsText(params(g.level));
     while (pipsEl.children.length < g.pips) { var np = document.createElement('span'); np.className = 'pip'; pipsEl.appendChild(np); }
     while (pipsEl.children.length > g.pips) pipsEl.removeChild(pipsEl.lastChild);
     pipsEl.className = 'pips' + (g.pips > 3 ? ' n' + g.pips : '');
@@ -954,37 +1507,48 @@
     musicStart();
     ov.hidden = true;
     hudKey = '';
-    spawnRound();
+    setCam(g.mode);
+    if (g.mode === 'save') spawnRound();
   }
 
-  function saveScore(s, kmh) {
+  function saveScore(mode, s, kmh) {
     if (!SB.ok) return Promise.resolve('local');
-    var better = !myBest || s > myBest.saves;
-    return sbFetch('/rest/v1/rpc/submit_score', {
-      method: 'POST',
-      body: JSON.stringify({ p_player: uid, p_name: g.name, p_team: g.team.id, p_saves: s, p_kmh: kmh })
-    }).then(function () { refreshRank(); return better ? 'saved' : 'notbest'; })
+    var mb = myBestBy[mode];
+    var better = !mb || s > mb.saves;
+    var body = { p_player: uid, p_name: g.name, p_team: g.team.id, p_saves: s, p_kmh: kmh, p_mode: mode };
+    return sbFetch('/rest/v1/rpc/submit_score', { method: 'POST', body: JSON.stringify(body) })
+      .catch(function (e) {
+        // supabase.sql 을 아직 새 버전으로 실행하지 않았다면 막기 기록만 옛 형식으로 저장
+        if (mode !== 'save') throw e;
+        delete body.p_mode;
+        return sbFetch('/rest/v1/rpc/submit_score', { method: 'POST', body: JSON.stringify(body) });
+      })
+      .then(function () { refreshRank(); return better ? 'saved' : 'notbest'; })
       .catch(function () { return 'error'; });
   }
 
   function finish() {
-    var mine = g;
+    var mine = g, mode = g.mode, km = mode === 'kick', unit = MODES[mode].unit;
     g.state = 'over';
     musicStop();
-    var s = g.saves, kmh = g.maxKmh;
-    var prev = Number(store.get('pks-best') || 0);
-    if (s > prev) store.set('pks-best', String(s));
-    $('oSaves').textContent = s;
-    $('oDetail').textContent = g.team.name + ' · 도달 레벨 ' + g.level + ' · 최고 속도 ' + kmh + ' km/h';
-    $('oStatus').textContent = s > 0 ? '기록을 확인하는 중입니다.' : '선방 0회. 다시 도전해 보세요.';
+    var s = g.saves, kmh = km ? g.maxStreak : g.maxKmh;
+    var bk = km ? 'pks-best-kick' : 'pks-best';
+    var prev = Number(store.get(bk) || 0);
+    if (s > prev) store.set(bk, String(s));
+    $('oSaves').textContent = s; $('oUnit').textContent = unit;
+    $('oDetail').textContent = km
+      ? g.team.name + ' · 도달 레벨 ' + g.level + ' · 최고 연속 ' + g.maxStreak + '골'
+      : g.team.name + ' · 도달 레벨 ' + g.level + ' · 최고 속도 ' + kmh + ' km/h';
+    $('oStatus').textContent = s > 0 ? '기록을 확인하는 중입니다.' : unit + ' 0회. 다시 도전해 보세요.';
     ovStart.hidden = true; ovEnd.hidden = false; ov.hidden = false;
-    showLocalBest();
+    setRankMode(mode);
     if (s > 0) {
-      saveScore(s, kmh).then(function (r) {
+      saveScore(mode, s, kmh).then(function (r) {
         if (g !== mine || g.state !== 'over') return;
+        var mb = myBestBy[mode];
         var msgs = {
-          saved: '내 최고 기록 ' + s + '선방을 순위표에 저장했습니다.',
-          notbest: '내 최고 기록은 ' + (myBest ? myBest.saves : s) + '선방입니다.',
+          saved: '내 최고 기록 ' + s + unit + '을 순위표에 저장했습니다.',
+          notbest: '내 최고 기록은 ' + (mb ? mb.saves : s) + unit + '입니다.',
           local: '순위표에 연결되지 않아 이 기기에만 기록했습니다.',
           error: '순위표에 저장하지 못했습니다. 잠시 뒤 다시 도전해 보세요.'
         };
@@ -994,8 +1558,8 @@
   }
 
   function showLocalBest() {
-    var b = Number(store.get('pks-best') || 0);
-    $('localBest').textContent = b > 0 ? '이 기기의 최고 기록 ' + b + '선방' : '';
+    var b = Number(store.get(rankMode === 'kick' ? 'pks-best-kick' : 'pks-best') || 0);
+    $('localBest').textContent = b > 0 ? '이 기기의 최고 기록 ' + b + MODES[rankMode].unit : '';
   }
 
   $('startBtn').addEventListener('click', startGame);
@@ -1012,21 +1576,38 @@
     var r = cv.getBoundingClientRect();
     g.tx = clamp((e.clientX - r.left) / r.width * W, g.gw / 2, W - g.gw / 2);
   }
-  cv.addEventListener('pointermove', function (e) { if (g.state === 'play') setTarget(e); });
+  function dragAim(e) {
+    if (!g.pd || g.phase !== 'aim') return;
+    if (cam !== CAMS.kick) setCam('kick');
+    var r = cv.getBoundingClientRect(), sc = W / r.width, kg = P(0, 1, 0).k;
+    g.aim.X = clamp(g.pd.X0 + (e.clientX - g.pd.px) * sc / kg * 1.2, -4.6, 4.6);
+    g.aim.Y = clamp(g.pd.Y0 - (e.clientY - g.pd.py) * sc / kg * 1.2, 0.1, 3.3);
+  }
+  cv.addEventListener('pointermove', function (e) {
+    if (g.state !== 'play') return;
+    if (g.mode === 'kick') dragAim(e); else setTarget(e);
+  });
   cv.addEventListener('pointerdown', function (e) {
     if (g.state !== 'play') return;
-    setTarget(e);
+    if (g.mode === 'kick') {
+      if (g.phase === 'aim') g.pd = { px: e.clientX, py: e.clientY, X0: g.aim.X, Y0: g.aim.Y };
+    } else setTarget(e);
     try { cv.setPointerCapture(e.pointerId); } catch (err) {}
   });
+  cv.addEventListener('pointerup', function () { if (g.mode === 'kick' && g.pd) { g.pd = null; shoot(); } });
+  cv.addEventListener('pointercancel', function () { g.pd = null; });
   function keyState(e, down) {
     if (e.target && e.target.tagName === 'INPUT') return;
-    var c = e.code;
+    var c = e.code, kk = g.mode === 'kick' && g.state === 'play';
     if (c === 'ArrowLeft' || c === 'KeyA') { keys.left = down; if (g.state === 'play') e.preventDefault(); }
     else if (c === 'ArrowRight' || c === 'KeyD') { keys.right = down; if (g.state === 'play') e.preventDefault(); }
+    else if (c === 'ArrowUp' || c === 'KeyW') { keys.up = down; if (kk) e.preventDefault(); }
+    else if (c === 'ArrowDown' || c === 'KeyS') { keys.down = down; if (kk) e.preventDefault(); }
+    else if ((c === 'Space' || c === 'Enter') && down && kk && !e.repeat) { e.preventDefault(); shoot(); }
   }
   window.addEventListener('keydown', function (e) { keyState(e, true); });
   window.addEventListener('keyup', function (e) { keyState(e, false); });
-  window.addEventListener('blur', function () { keys.left = keys.right = false; });
+  window.addEventListener('blur', function () { keys.left = keys.right = keys.up = keys.down = false; if (g) g.pd = null; });
 
   /* ---------- loop ---------- */
   var last = 0;
@@ -1039,6 +1620,7 @@
   requestAnimationFrame(frame);
 
   /* ---------- shared ranking (db capability) ---------- */
+  var rowsBy = { save: [], kick: [] }, myBestBy = { save: null, kick: null };
   var CFG = window.PENALTY_CONFIG || {};
   var SB = { ok: !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && String(CFG.SUPABASE_URL).indexOf('YOUR-') < 0 && String(CFG.SUPABASE_ANON_KEY).indexOf('YOUR-') < 0) };
   function getPlayerId() {
@@ -1050,7 +1632,7 @@
     }
     return id;
   }
-  var uid = getPlayerId(), myBest = null, rows = [], loaded = false, listening = false;
+  var uid = getPlayerId(), loaded = false, listening = false;
   function sbFetch(path, opts) {
     opts = opts || {};
     var h = { apikey: CFG.SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
@@ -1067,7 +1649,8 @@
   function renderRank() {
     rowsEl.textContent = '';
     podiumEl.textContent = '';
-    var list = rows.filter(function (r) { return typeof r.saves === 'number'; })
+    var unit = MODES[rankMode].unit;
+    var list = rowsBy[rankMode].filter(function (r) { return typeof r.saves === 'number'; })
       .sort(function (a, b) { return b.saves - a.saves || (a.at || 0) - (b.at || 0); });
     podiumEl.hidden = !list.length;
     if (!list.length) {
@@ -1098,12 +1681,12 @@
       }
       var bits = [];
       if (tm) bits.push(tm.name);
-      if (typeof r.kmh === 'number') bits.push('최고 ' + r.kmh + ' km/h');
+      if (typeof r.kmh === 'number') bits.push(rankMode === 'kick' ? '최고 연속 ' + r.kmh + '골' : '최고 ' + r.kmh + ' km/h');
       sub.appendChild(document.createTextNode(bits.join(' · ')));
       mid.appendChild(nr); mid.appendChild(sub);
       var sc = document.createElement('div'); sc.className = 'sc';
       var n = document.createElement('span'); n.className = 'led'; n.textContent = r.saves;
-      var u = document.createElement('small'); u.textContent = '선방';
+      var u = document.createElement('small'); u.textContent = unit;
       sc.appendChild(n); sc.appendChild(u);
       li.appendChild(rk); li.appendChild(mid); li.appendChild(sc);
       return li;
@@ -1141,7 +1724,7 @@
         step.appendChild(pt);
         var ps = document.createElement('div'); ps.className = 'pscore';
         var n = document.createElement('span'); n.className = 'led'; n.textContent = r.saves;
-        var u = document.createElement('small'); u.textContent = '선방';
+        var u = document.createElement('small'); u.textContent = unit;
         ps.appendChild(n); ps.appendChild(u);
         step.appendChild(ps);
       }
@@ -1155,19 +1738,30 @@
     list.slice(3, 5).forEach(function (r, i) { rowsEl.appendChild(row(r, i + 3)); });
   }
 
+  function applyRows(data, hasMode) {
+    var by = { save: [], kick: [] };
+    (data || []).forEach(function (d) {
+      var m = hasMode && d.mode === 'kick' ? 'kick' : 'save';
+      by[m].push({ id: d.player_id, name: d.name, team: d.team, saves: d.saves, kmh: d.kmh, at: Date.parse(d.achieved_at) || 0 });
+    });
+    rowsBy = by;
+    loaded = true;
+    setNote('한 사람당 방식마다 최고 기록 하나만 남습니다. 브라우저를 바꾸면 새 기록으로 시작합니다.');
+    ['save', 'kick'].forEach(function (m) {
+      myBestBy[m] = rowsBy[m].find(function (r) { return r.id === uid; }) || null;
+      if (myBestBy[m] && !nick.value && typeof myBestBy[m].name === 'string') nick.value = myBestBy[m].name;
+    });
+    renderRank();
+  }
   function refreshRank() {
-    return sbFetch('/rest/v1/scores?select=player_id,name,team,saves,kmh,achieved_at&order=saves.desc,achieved_at.asc&limit=200')
-      .then(function (data) {
-        rows = (data || []).map(function (d) {
-          return { id: d.player_id, name: d.name, team: d.team, saves: d.saves, kmh: d.kmh, at: Date.parse(d.achieved_at) || 0 };
-        });
-        loaded = true;
-        setNote('한 사람당 최고 기록 하나만 남습니다. 브라우저를 바꾸면 새 기록으로 시작합니다.');
-        myBest = rows.find(function (r) { return r.id === uid; }) || null;
-        if (myBest && !nick.value && typeof myBest.name === 'string') nick.value = myBest.name;
-        renderRank();
-      })
-      .catch(function () { if (!loaded) setNote('순위표를 불러오지 못했습니다. 잠시 뒤 다시 시도합니다.'); });
+    return sbFetch('/rest/v1/scores?select=player_id,name,team,saves,kmh,achieved_at,mode&order=saves.desc,achieved_at.asc&limit=400')
+      .then(function (data) { applyRows(data, true); })
+      .catch(function () {
+        // supabase.sql 을 아직 새 버전으로 실행하지 않았다면 mode 칸이 없어서 실패합니다. 그때는 막기 순위표만 불러옵니다.
+        return sbFetch('/rest/v1/scores?select=player_id,name,team,saves,kmh,achieved_at&order=saves.desc,achieved_at.asc&limit=200')
+          .then(function (data) { applyRows(data, false); })
+          .catch(function () { if (!loaded) setNote('순위표를 불러오지 못했습니다. 잠시 뒤 다시 시도합니다.'); });
+      });
   }
 
   function initRank() {
@@ -1200,6 +1794,45 @@
   teamSel.value = TEAM_BY_ID[store.get('pks-team')] ? store.get('pks-team') : TEAMS[0].id;
   teamSel.addEventListener('change', onTeamChange);
   onTeamChange();
+
+  var viewBtn = $('viewBtn');
+  function paintView() {
+    viewBtn.setAttribute('aria-pressed', view3d ? 'true' : 'false');
+    viewBtn.classList.toggle('off', !view3d);
+    viewBtn.querySelector('.slabel').textContent = view3d ? '3D 화면' : '2D 화면';
+  }
+  viewBtn.addEventListener('click', function () { view3d = !view3d; store.set('pks-view', view3d ? '3d' : '2d'); paintView(); });
+  paintView();
+
+  function setRankMode(m) {
+    rankMode = m;
+    document.querySelectorAll('.tab').forEach(function (b) {
+      var on = b.getAttribute('data-rank') === m;
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    $('rankSub').textContent = (m === 'kick' ? '골 수' : '선방 횟수') + '가 많은 순서입니다. 같으면 먼저 달성한 사람이 위에 옵니다. 상위 5명만 보입니다.';
+    renderRank(); showLocalBest();
+  }
+  function setMode(m) {
+    selMode = m; store.set('pks-mode', m);
+    var km = m === 'kick';
+    document.querySelectorAll('.mbtn').forEach(function (b) {
+      var on = b.getAttribute('data-mode') === m;
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    $('ttl').textContent = km ? '패널티킥을 차라' : '패널티킥을 막아라';
+    $('rulesSave').hidden = km; $('rulesKick').hidden = !km;
+    $('startBtn').textContent = '킥오프';
+    $('hint').textContent = km ? '키커 뒤에서 보는 화면입니다. 화면을 끌어서 조준하고 손을 떼면 슛합니다.' : '골키퍼 뒤에서 보는 화면입니다. 좌우로 움직여 슈팅을 막으세요.';
+    cv.style.cursor = km ? 'crosshair' : 'ew-resize';
+    cv.setAttribute('aria-label', km ? '패널티킥 차기 화면. 화면을 끌어 조준하고 손을 떼면 슛합니다.' : '패널티킥 막기 화면. 골키퍼를 좌우로 움직여 슈팅을 막습니다.');
+    viewBtn.hidden = km;
+    if (g.state !== 'play') { g.mode = m; hudKey = ''; }
+    setRankMode(m);
+  }
+  document.querySelectorAll('.mbtn').forEach(function (b) { b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); }); });
+  document.querySelectorAll('.tab').forEach(function (b) { b.addEventListener('click', function () { setRankMode(b.getAttribute('data-rank')); }); });
+  setMode(selMode);
 
   nick.value = store.get('pks-name') || '';
   showLocalBest();
