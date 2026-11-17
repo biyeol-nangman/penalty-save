@@ -287,7 +287,7 @@
             <ul class="rules" id="rulesSave">
               <li>방향키 또는 A·D, 터치·마우스로 골키퍼 이동</li>
               <li>레벨 4 커브 · 6 막판 가속 · 8 연속 슈팅</li>
-              <li>30선방부터 가끔 나오는 하트는 막으면 기회 +1 (최대 5)</li>
+              <li>20선방부터 가끔 나오는 하트는 막으면 기회 +1 (최대 5)</li>
               <li>해골은 피하세요 (막으면 기회 -1)</li>
             </ul>
           </div>
@@ -933,7 +933,7 @@
     return true;
   }
 
-  // a skull, or a heart once the keeper has 30 saves, flies alone now and then and never counts as a save.
+  // a skull, or a heart once the keeper has 20 saves, flies alone now and then and never counts as a save.
   // heart: blocking it gives one more chance (missing it costs nothing).
   // skull: blocking it costs one chance (letting it pass costs nothing).
   function spawnItem(kind, p) {
@@ -952,8 +952,8 @@
   function spawnRound() {
     var p = params(g.level), i;
     var kind = null;
-    // every so often (not twice within 3 rounds) a bonus shot flies alone: a skull, or from 30 saves on sometimes a heart
-    if (g.level >= 3 && g.since >= 3 && Math.random() < 0.25) kind = (g.saves >= 30 && Math.random() < 0.4) ? 'heart' : 'skull';
+    // every so often (not twice within 3 rounds) a bonus shot flies alone: a skull, or from 20 saves on sometimes a heart
+    if (g.level >= 3 && g.since >= 3 && Math.random() < 0.25) kind = (g.saves >= 20 && Math.random() < 0.4) ? 'heart' : 'skull';
     if (kind) { g.since = 0; spawnItem(kind, p); return; }
     g.since++;
     g.n = p.n;
